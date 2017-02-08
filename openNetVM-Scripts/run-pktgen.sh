@@ -41,10 +41,10 @@
 BLACK_LIST="-b 0000:05:00.0 -b 0000:05:00.1"
 
 # Path variable for pktgen
-PKTGENBUILD="../app/app/x86_64-native-linuxapp-gcc/app/pktgen"
+PKTGENBUILD="./app/app/x86_64-native-linuxapp-gcc/app/pktgen"
 
 # Path for pktgen config
-PKTGENCONFIG="./pktgen-config.lua"
+PKTGENCONFIG="./openNetVM-Scripts/pktgen-config.lua"
 
 if [[ $1 -eq 0 ]] ; then
 	echo "pass an argument for port count"
@@ -56,11 +56,11 @@ echo "Start pktgen"
 
 if [ $1 = 2 ]; then
 
-sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x1 -P -m "[1:2].0, [3:4].1" -f $PKTGENCONFIG
+(cd ../ && sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x1 -P -m "[1:2].0, [3:4].1" -f $PKTGENCONFIG)
 
 else
 
-sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f $PKTGENCONFIG
+(cd ../ && sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f $PKTGENCONFIG)
 
 fi
 
