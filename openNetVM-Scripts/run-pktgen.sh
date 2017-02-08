@@ -43,6 +43,6 @@ BLACK_LIST="-b 0000:05:00.0 -b 0000:05:00.1"
 echo "Start pktgen"
 
 # Change this line to match your local directory structure
-sudo [...]/tools/Pktgen/pktgen-dpdk/app/app/x86_64-native-linuxapp-gcc/app/pktgen -c ffff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f [...]/tools/Pktgen/pktgen-dpdk/pktgen-config.lua
+sudo [...]/tools/Pktgen/pktgen-dpdk/app/app/x86_64-native-linuxapp-gcc/app/pktgen -c ffff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f [...]/tools/Pktgen/pktgen-dpdk/openNetVM-Scripts/pktgen-config.lua
 
 echo "Pktgen done"
