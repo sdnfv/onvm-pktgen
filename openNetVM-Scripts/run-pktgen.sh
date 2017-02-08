@@ -40,9 +40,28 @@
 # These are the interfaces that you do not want to use for Pktgen-DPDK
 BLACK_LIST="-b 0000:05:00.0 -b 0000:05:00.1"
 
+# Path variable for pktgen
+PKTGENBUILD="../app/app/x86_64-native-linuxapp-gcc/app/pktgen"
+
+# Path for pktgen config
+PKTGENCONFIG="./pktgen-config.lua"
+
+if [[ $1 -eq 0 ]] ; then
+	echo "pass an argument for port count"
+	echo "example usage: sudo bash run-pktgen.sh 1"
+	exit 0
+fi
+
 echo "Start pktgen"
 
-# Change this line to match your local directory structure
-sudo [...]/tools/Pktgen/pktgen-dpdk/app/app/x86_64-native-linuxapp-gcc/app/pktgen -c ffff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f [...]/tools/Pktgen/pktgen-dpdk/openNetVM-Scripts/pktgen-config.lua
+if [ $1 = 2 ]; then
+
+sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x1 -P -m "[1:2].0, [3:4].1" -f $PKTGENCONFIG
+
+else
+
+sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f $PKTGENCONFIG
+
+fi
 
 echo "Pktgen done"
