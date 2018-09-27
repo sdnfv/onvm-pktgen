@@ -41,7 +41,7 @@
 BLACK_LIST="-b 0000:05:00.0 -b 0000:05:00.1"
 
 # Path variable for pktgen
-PKTGENBUILD="./app/app/x86_64-native-linuxapp-gcc/app/pktgen"
+PKTGENBUILD="./app/x86_64-native-linuxapp-gcc/pktgen"
 
 # Path for pktgen config
 PKTGENCONFIG="./openNetVM-Scripts/pktgen-config.lua"
