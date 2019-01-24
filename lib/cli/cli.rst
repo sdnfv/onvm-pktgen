@@ -1,5 +1,5 @@
 ..  BSD LICENSE
-   Copyright(c) 2017 Intel Corporation. All rights reserved.
+   Copyright(c) <2016-2019> Intel Corporation. All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
@@ -198,7 +198,6 @@ and execute or modify a previous command in history.
 The user can also execute host level commands if enabled using the '@' prefix
 to a command line e.g. @ls or @lspci or ... line is passed to popen or system
 function to be executed and the output displayed on the console if any output.
-To disable set CONFIG_RTE_CLI_HOST_COMMANDS=n in configuration file.
 
 Compiling the Application
 -------------------------
@@ -593,4 +592,3 @@ format to be parsed by the function. The function is attached to a command file
 in the directory tree and is executed when the user types the name of the
 function along with it arguments. Some examples of the default commands can be
 seen in the lib/librte_cli/cli_cmds.c file.
-

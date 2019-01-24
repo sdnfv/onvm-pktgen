@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -93,7 +93,7 @@
 extern "C" {
 #endif
 
-#define PKTGEN_VERSION          "3.4.9"
+#define PKTGEN_VERSION          "3.6.3"
 #define PKTGEN_APP_NAME         "Pktgen"
 #define PKTGEN_CREATED_BY       "Keith Wiles"
 
@@ -102,17 +102,23 @@ extern "C" {
 #define Million                 (uint64_t)(1000000ULL)
 
 #define iBitsTotal(_x) \
-	(uint64_t)(((_x.ipackets * (INTER_FRAME_GAP + PKT_PREAMBLE_SIZE + FCS_SIZE)) + _x.ibytes) * 8)
+	(uint64_t)(((_x.ipackets * PKT_OVERHEAD_SIZE) + _x.ibytes) * 8)
 #define oBitsTotal(_x) \
-	(uint64_t)(((_x.opackets * (INTER_FRAME_GAP + PKT_PREAMBLE_SIZE + FCS_SIZE)) + _x.obytes) * 8)
+	(uint64_t)(((_x.opackets * PKT_OVERHEAD_SIZE) + _x.obytes) * 8)
 
 #define _do(_exp)       do { _exp; } while ((0))
 
+#ifndef RTE_ETH_FOREACH_DEV
+#define RTE_ETH_FOREACH_DEV(p)	for(_p = 0; _p < pktgen.nb_ports; _p++)
+#endif
+
 #define forall_ports(_action)					\
 	do {							\
-		uint32_t pid;					\
-		for (pid = 0; pid < pktgen.nb_ports; pid++) {	\
-			port_info_t   *info;			\
+		uint16_t pid;					\
+								\
+		RTE_ETH_FOREACH_DEV(pid) {			\
+			port_info_t *info;			\
+								\
 			info = &pktgen.info[pid];		\
 			if (info->seq_pkt == NULL)		\
 				continue;			\
@@ -122,13 +128,15 @@ extern "C" {
 
 #define foreach_port(_portlist, _action)				\
 	do {								\
-		uint32_t    *_pl = (uint32_t *)&_portlist;		\
-		uint32_t pid, idx, bit;					\
-		for (pid = 0; pid < pktgen.nb_ports; pid++) {		\
+		uint64_t *_pl = (uint64_t *)&_portlist;			\
+		uint16_t pid, idx, bit;					\
+									\
+		RTE_ETH_FOREACH_DEV(pid) {				\
 			port_info_t   *info;				\
-			idx = (pid / (sizeof(uint32_t) * 8));		\
-			bit = (pid - (idx * (sizeof(uint32_t) * 8)));	\
-			if ( (_pl[idx] & (1 << bit)) == 0)		\
+									\
+			idx = (pid / (sizeof(uint64_t) * 8));		\
+			bit = (pid - (idx * (sizeof(uint64_t) * 8)));	\
+			if ( (_pl[idx] & (1LL<< bit)) == 0)		\
 				continue;				\
 			info = &pktgen.info[pid];			\
 			if (info->seq_pkt == NULL)			\
@@ -154,8 +162,8 @@ rte_pktmbuf_free_bulk(struct rte_mbuf *m_list[], int16_t npkts)
 	struct rte_mbuf *m;
 	while (npkts--) {
 		m = *m_list++;
-		m->next = 0;
 		rte_pktmbuf_free(m);
+		m->next = 0;
 	}
 }
 
@@ -166,14 +174,14 @@ enum {
 	MAX_SCRN_ROWS           = 44,
 	MAX_SCRN_COLS           = 132,
 
-	COLUMN_WIDTH_0          = 20,
+	COLUMN_WIDTH_0          = 22,
 	COLUMN_WIDTH_1          = 20,
 	COLUMN_WIDTH_3          = 22,
 
 	/* Row locations for start of data */
 	PORT_STATE_ROWS         = 1,
 	LINK_STATE_ROWS         = 4,
-	PKT_SIZE_ROWS           = 9,
+	PKT_SIZE_ROWS           = 10,
 	PKT_TOTALS_ROWS         = 7,
 	IP_ADDR_ROWS            = 12,
 
@@ -221,11 +229,14 @@ enum {
 	NUM_TOTAL_PKTS          = (EXTRA_TX_PKT + NUM_EXTRA_TX_PKTS),
 
 	INTER_FRAME_GAP         = 12,	/**< in bytes */
-	PKT_PREAMBLE_SIZE       = 8,	/**< in bytes */
-	FCS_SIZE                = 4,	/**< in bytes */
-	MIN_PKT_SIZE            = (ETHER_MIN_LEN - FCS_SIZE),
-	MAX_PKT_SIZE            = (ETHER_MAX_LEN - FCS_SIZE),
-	MIN_v6_PKT_SIZE         = (78 - FCS_SIZE),
+	START_FRAME_DELIMITER	= 1,
+	PKT_PREAMBLE_SIZE       = 7,	/**< in bytes */
+	PKT_OVERHEAD_SIZE	= (INTER_FRAME_GAP + START_FRAME_DELIMITER +
+				   PKT_PREAMBLE_SIZE + ETHER_CRC_LEN),
+
+	MIN_PKT_SIZE            = (ETHER_MIN_LEN - ETHER_CRC_LEN),
+	MAX_PKT_SIZE            = (ETHER_MAX_LEN - ETHER_CRC_LEN),
+	MIN_v6_PKT_SIZE         = (78 - ETHER_CRC_LEN),
 
 	MAX_RX_QUEUES           = 16,	/**< RX Queues per port */
 	MAX_TX_QUEUES           = 16,	/**< TX Queues per port */
@@ -246,8 +257,10 @@ typedef union {
 /* Ethernet addresses of ports */
 typedef struct pktgen_s {
 	struct cmdline *cl;	/**< Command Line information pointer */
-	void *L;		/**< Lua State pointer */
+	luaData_t *ld;		/**< General Lua Data pointer */
+	luaData_t *ld_sock;	/**< Info for Lua Socket */
 	char *hostname;		/**< GUI hostname */
+	int verbose;		/**< Verbose flag */
 
 	int32_t socket_port;		/**< GUI port number */
 	uint32_t blinklist;		/**< Port list for blinking the led */
@@ -327,6 +340,7 @@ enum {						/* Pktgen flags bits */
 	LOG_PAGE_FLAG           = (1 << 22),	/**< Display the message log page */
 	LATENCY_PAGE_FLAG       = (1 << 23),	/**< Display latency page */
 	STATS_PAGE_FLAG         = (1 << 24),	/**< Display the physical port stats */
+	XSTATS_PAGE_FLAG        = (1 << 25),	/**< Display the physical port stats */
 
 	UPDATE_DISPLAY_FLAG     = (1 << 31)
 };
@@ -340,7 +354,8 @@ enum {						/* Pktgen flags bits */
 			 RANGE_PAGE_FLAG | \
 			 PCAP_PAGE_FLAG | CPU_PAGE_FLAG | \
 			 RND_BITFIELD_PAGE_FLAG | \
-			 LOG_PAGE_FLAG | LATENCY_PAGE_FLAG | STATS_PAGE_FLAG)
+			 LOG_PAGE_FLAG | LATENCY_PAGE_FLAG | \
+			 XSTATS_PAGE_FLAG | STATS_PAGE_FLAG)
 
 extern pktgen_t pktgen;
 

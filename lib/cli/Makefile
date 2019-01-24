@@ -1,22 +1,31 @@
-#   BSD LICENSE
-#
-#   Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
-#
-#  SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright(c) <2016-2019> Intel Corporation.
 #
 
-include $(RTE_SDK)/$(RTE_TARGET)/.config
 include $(RTE_SDK)/mk/rte.vars.mk
 
 # library name
-LIB = librte_cli.a
+LIB = libcli.a
 
-CFLAGS += -O3 -D_GNU_SOURCE $(WERROR_FLAGS) -I$(SRCDIR)
-CFLAGS += -DRTE_CLI_HOST_COMMANDS
-CFLAGS += -DRTE_LIBRTE_LUA -DCLI_STANDALONE
+CFLAGS += -O3 $(WERROR_FLAGS) -I$(SRCDIR) -D_GNU_SOURCE
+CFLAGS += -DALLOW_EXPERIMENTAL_API
+
+ifeq ($(CONFIG_RTE_LIBRTE_LUA),y)
+else
 CFLAGS += -I$(RTE_SRCDIR)/../lua/src
+endif
+ifeq ($(CONFIG_RTE_LIBRTE_UTILS),y)
+else
+CFLAGS += -I$(RTE_SRCDIR)/../utils
+endif
 
-EXPORT_MAP := rte_cli_version.map
+LDLIBS += -L$(RTE_SRCDIR)/../utils/$(RTE_TARGET)/lib -lrte_eal -lrte_mempool -lrte_mbuf -lrte_timer
+ifeq ($(CONFIG_RTE_LIBRTE_UTILS),y)
+else
+LDLIBS += -lutils
+endif
+
+EXPORT_MAP := cli_version.map
 
 LIBABIVER := 1
 
@@ -35,9 +44,6 @@ SRCS-y +=  cli_search.c
 SRCS-y +=  cli_cmap.c
 SRCS-y +=  cli_vt100.c
 SRCS-y +=  cli_scrn.c
-SRCS-y +=  cli_string_fns.c
-
-CFLAGS += -D_GNU_SOURCE
 
 # install includes
 SYMLINK-y-include += cli.h
@@ -51,7 +57,6 @@ SYMLINK-y-include += cli_search.h
 SYMLINK-y-include += cli_help.h
 SYMLINK-y-include += cli_history.h
 SYMLINK-y-include += cli_scrn.h
-SYMLINK-y-include += cli_string_fns.h
 
 # this lib needs eal
 DEPDIRS-y += lib/librte_eal lib/librte_mempool

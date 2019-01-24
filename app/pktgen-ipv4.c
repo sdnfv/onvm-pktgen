@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 
 #include <cli_scrn.h>
+#include <rte_lua.h>
+
 #include "pktgen.h"
 #include "pktgen-log.h"
 #include "pktgen-ipv4.h"

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -108,11 +108,11 @@ extern "C" {
  * arguments. It formats the string and appends it to the existing string, while
  * avoiding possible buffer overruns.
  */
-#define strncatf(dest, fmt, ...) do {					       \
-		char _buff[1024];						       \
-		snprintf(_buff, sizeof(_buff), fmt, ## __VA_ARGS__);			\
-		strncat(dest, _buff, sizeof(dest) - strlen(dest) - 1);		       \
-} while (0)
+#define strncatf(dest, fmt, ...) do {					\
+		char _buff[1023];					\
+		snprintf(_buff, sizeof(_buff), fmt, ## __VA_ARGS__);	\
+		strncat(dest, _buff, sizeof(dest) - strlen(dest) - 1);	\
+	} while (0)
 
 /* Initialize log data structures */
 void pktgen_init_log(void);

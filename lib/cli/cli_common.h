@@ -1,7 +1,5 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
 #ifndef _CLI_COMMON_H_
@@ -63,4 +61,4 @@ cli_printf(const char *fmt, ...)
 }
 #endif
 
-#endif /* _CLI_HELP_H_ */
+#endif /* _CLI_COMMON_H_ */

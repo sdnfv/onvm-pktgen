@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,6 +13,10 @@
 
 #include <rte_memory.h>
 #include <rte_atomic.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define MAX_MATRIX_ENTRIES      128
 #define MAX_STRING              256
@@ -482,5 +486,9 @@ pg_dump_l2p(l2p_t *l2p)
 void pg_port_matrix_dump(l2p_t *l2p);
 int pg_parse_matrix(l2p_t *l2p, char *str);
 uint32_t pg_parse_portmask(const char *portmask);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __WR_L2P_H */

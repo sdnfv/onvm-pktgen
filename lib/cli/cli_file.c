@@ -1,7 +1,5 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
 #include "cli.h"
@@ -232,7 +230,7 @@ cli_file_create(const char *path, const char *type)
 
 	data = malloc(CLI_FILE_SIZE);
 	if (data) {
-		parent = cli_last_node_in_path(path);
+		parent = cli_last_dir_in_path(path);
 		if (parent) {
 			node = cli_add_file(file, parent, cli_file_handler, "");
 			if (node) {

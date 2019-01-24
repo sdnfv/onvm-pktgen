@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2016-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2016-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -13,6 +13,8 @@
 #include <stdio.h>
 
 #include <rte_malloc.h>
+
+#include "rte_lua.h"
 
 #include "pktgen-display.h"
 #include "pktgen-log.h"
@@ -67,6 +69,8 @@ pktgen_rnd_bits_init(rnd_bits_t **rnd_bits)
 			sizeof(rnd_bits_t),
 			0,
 			rte_socket_id());
+
+	pktgen_display_set_color("stats.stat.values");
 
 	/* Initialize mask to all ignore */
 	for (i = 0; i < MAX_RND_BITFIELDS; ++i) {
@@ -267,8 +271,10 @@ pktgen_page_random_bitfields(uint32_t print_labels,
 	mask[35] = '\0';
 	mask[8] = mask[17] = mask[26] = ' ';
 
+	pktgen_display_set_color("top.page");
 	display_topline("<Random bitfield Page>");
 
+	pktgen_display_set_color("top.ports");
 	scrn_printf(1, 3, "Port %d", pid);
 
 	row = PORT_STATE_ROW;
@@ -281,6 +287,7 @@ pktgen_page_random_bitfields(uint32_t print_labels,
 		row = 28;
 		goto leave;
 	}
+	pktgen_display_set_color("stats.stats.label");
 	/* Header line */
 	scrn_printf(
 	        row++,
@@ -291,6 +298,7 @@ pktgen_page_random_bitfields(uint32_t print_labels,
 	        "Act?",
 	        "Mask [0 = 0 bit, 1 = 1 bit, X = random bit, . = ignore]");
 
+	pktgen_display_set_color("stats.stat.values");
 	for (bitmask_idx = 0; bitmask_idx < MAX_RND_BITFIELDS; ++bitmask_idx) {
 		curr_spec = &rnd_bits->specs[bitmask_idx];
 
@@ -317,6 +325,7 @@ pktgen_page_random_bitfields(uint32_t print_labels,
 
 leave:
 	display_dashline(++row);
+	pktgen_display_set_color(NULL);
 }
 
 static void

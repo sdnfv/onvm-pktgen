@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2015-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2015-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -7,6 +7,8 @@
 /* Created 2015 by abhinandan.gujjar@intel.com */
 
 #include <cli_scrn.h>
+#include "rte_lua.h"
+
 #include "pktgen.h"
 
 #include "pktgen-gtpu.h"

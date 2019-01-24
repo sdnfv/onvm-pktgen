@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  *  SPDX-License-Identifier: BSD-3-Clause
  */
@@ -8,6 +8,10 @@
 
 #ifndef _CORE_INFO_H
 #define _CORE_INFO_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**************************************************************************//**
  *
@@ -36,5 +40,9 @@ lcore_mask(uint16_t *first, uint16_t *last) {
 }
 
 uint32_t sct_convert(char *sct[]);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _CORE_INFO_H */

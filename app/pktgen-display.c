@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -7,6 +7,8 @@
 /* Created 2010 by Keith Wiles @ intel.com */
 
 #include <sys/stat.h>
+#include "rte_lua.h"
+
 #include "pktgen-display.h"
 #include "pktgen-cmds.h"
 
@@ -122,6 +124,7 @@ theme_color_map_t theme_color_map[] = {
 void
 display_topline(const char *msg)
 {
+	pktgen_display_set_color("top.page");
 	scrn_printf(1, 20, "%s", msg);
 	pktgen_display_set_color("top.copyright");
 	scrn_puts("  %s", copyright_msg_short());
@@ -144,6 +147,7 @@ display_dashline(int last_row)
 	scrn_printf(last_row, 3, " Pktgen %s ", pktgen_version());
 	pktgen_display_set_color("top.poweredby");
 	scrn_puts(" %s ", powered_by());
+	scrn_puts(" (pid:%d) ", getpid());
 	pktgen_display_set_color(NULL);
 }
 
@@ -151,6 +155,8 @@ display_dashline(int last_row)
 void
 pktgen_display_set_geometry(uint16_t rows, uint16_t cols)
 {
+	if (!this_scrn)
+		return;
 	this_scrn->nrows = rows;
 	this_scrn->ncols = cols;
 }
@@ -159,6 +165,9 @@ pktgen_display_set_geometry(uint16_t rows, uint16_t cols)
 void
 pktgen_display_get_geometry(uint16_t *rows, uint16_t *cols)
 {
+	if (!this_scrn)
+		return;
+
 	if (rows != NULL)
 		*rows = this_scrn->nrows;
 
@@ -192,7 +201,7 @@ void
 pktgen_display_set_color(const char *elem) {
 	theme_color_map_t *theme_color;
 
-	if (this_scrn->theme == SCRN_THEME_OFF)
+	if (!this_scrn || this_scrn->theme == SCRN_THEME_OFF)
 		return;
 
 	theme_color = lookup_item(elem);
@@ -211,6 +220,9 @@ void
 __set_prompt(void)
 {
 	theme_color_map_t *def, *prompt;
+
+	if (!this_scrn)
+		return;
 
 	/* Set default return value. */
 	snprintf(prompt_str, sizeof(prompt_str), "%s> ", PKTGEN_APP_NAME);
@@ -287,6 +299,9 @@ pktgen_theme_show(void)
 {
 	int i;
 
+	if (!this_scrn)
+		return;
+
 	printf("*** Theme Color Map Names (%s) ***\n",
 	       this_scrn->theme ? "Enabled" : "Disabled");
 	printf("   %-30s %-10s %-10s %s\n",
@@ -311,6 +326,8 @@ pktgen_theme_show(void)
 void
 pktgen_theme_state(const char *state)
 {
+	if (!this_scrn)
+		return;
 	if (estate(state) == DISABLE_STATE)
 		this_scrn->theme = SCRN_THEME_OFF;
 	else

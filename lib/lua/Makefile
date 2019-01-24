@@ -1,24 +1,94 @@
-#   BSD LICENSE
 #
-#   Copyright(c) 2010-2012 Intel Corporation. All rights reserved.
+#   Copyright(c) 2015-2016 Intel Corporation. All rights reserved.
 #
-#   SPDX-License-Identifier: BSD-3-Clause
+#   SPDX-License-Indentifier: BSD-3-Clause
+
 #
 
-lua_version := 5.3.4
-tarball := lua-$(lua_version).tar.gz
+include $(RTE_SDK)/mk/rte.vars.mk
 
-all: get_tarball
-	@make -C lua-$(lua_version)
+# library name
+LIB = libpktgen_lua.a
 
-get_tarball:
-	@if [ ! -f $(tarball) ]; then \
-		wget https://www.lua.org/ftp/lua-5.3.4.tar.gz; \
-	fi
-	@if [ ! -d lua-$(lua_version) ]; then \
-		tar xf $(tarball); \
-		(cd lua-5.3.4; patch -p1 < ../lua-5.3.4.patch); \
-	fi
+EXPORT_MAP := lua_version.map
+LIBABIVER := 1
 
-clean:
-	@rm -fr lua-$(lua_version)
+# To overcome problems with FD6 more strict warnings gcc flags,
+# the following ones were removed:
+#  -Wstrict-prototypes
+#  -Wmissing-prototypes
+#  -Wold-style-definition
+#  -Wmissing-declarations
+#  -Wcast-qual
+WERROR_FLAGS := -W -Wall
+WERROR_FLAGS += -Wpointer-arith
+WERROR_FLAGS += -Wcast-align
+WERROR_FLAGS += -Wnested-externs
+WERROR_FLAGS += -Wno-cast-align
+
+CFLAGS += -O3 -g -DLUA_USE_LINUX -DUSE_64_BIT -DALLOW_EXPERIMENTAL_API
+CFLAGS += -D_GNU_SOURCE $(WERROR_FLAGS) -I$(RTE_SRCDIR) -fno-stack-protector
+
+LDLIBS += -lrte_eal -lrte_mempool -lrte_ethdev -lrte_mbuf -lrte_timer
+
+ifeq ($(CONFIG_RTE_LIBRTE_VEC),y)
+else
+	CFLAGS += -I$(SRCDIR)/../vec/$(RTE_TARGET)/include
+endif
+
+ifeq ($(CONFIG_RTE_LIBRTE_LUA),y)
+else
+PKG := $(shell which pkg-config)
+ifeq (x$(PKG),x)
+$(info "pkg-config command is not found using defaults")
+$(info "Get lua-5.3 from lua.org and build it on your system")
+$(info "Also install lua 5.3 into /usr/local/include and /usr/local/lib")
+$(info "Make sure the library in /usr/local/lib is called liblua.a or liblua.so")
+
+# set defaults
+LUA_PKG_CFLAGS  = -I/usr/local/include
+else
+LUA_PKG_CFLAGS  = $(shell pkg-config --silence-errors --cflags lua-5.3)
+
+ifeq ($(LUA_PKG_CFLAGS),)
+LUA_PKG_CFLAGS = $(shell pkg-config --silence-errors --cflags lua-5.3)
+endif
+
+ifeq ($(LUA_PKG_CFLAGS),)
+LUA_PKG_CFLAGS = $(shell pkg-config --silence-errors --cflags lua)
+endif
+
+ifeq ($(LUA_PKG_CFLAGS),)
+$(info "Lua pkg-config was not found")
+$(info "Get lua-5.3 from lua.org and build it on your system")
+$(info "Also install lua 5.3 into /usr/local/include and /usr/local/lib")
+$(info "Make sure the library in /usr/local/lib is called liblua.a")
+
+# set defaults
+LUA_PKG_CFLAGS  = -I/usr/local/include
+endif
+endif
+
+# Pktgen Lua support code locations
+CFLAGS  += -I$(RTE_SRCDIR)/../lua/$(RTE_TARGET)/include
+
+CFLAGS  += $(LUA_PKG_CFLAGS)
+endif
+
+ifeq ($(CONFIG_RTE_LIBRTE_UTILS),y)
+else
+	CFLAGS  += -I$(SRCDIR)/../utils/$(RTE_TARGET)/include
+endif
+
+LDLIBS += -pthread
+
+# all source are stored in SRCS-y
+SRCS-y := rte_lua.c rte_lua_stdio.c rte_lua_utils.c rte_lua_socket.c
+SRCS-y += rte_lua_dpdk.c rte_lua_pktmbuf.c rte_lua_vec.c
+SRCS-y += rte_lua_dapi.c
+
+SYMLINK-y-include := rte_lua.h rte_lua_stdio.h rte_lua_utils.h rte_lua_socket.h
+SYMLINK-y-include += rte_lua_dpdk.h rte_lua_pktmbuf.h rte_lua_vec.h
+SYMLINK-y-include += rte_lua_dapi.h
+
+include $(RTE_SDK)/mk/rte.extlib.mk

@@ -190,7 +190,7 @@ update_port_static_info(unsigned int pid)
 
 		case 3:
 			g_snprintf(buf, sizeof(buf), "%d",
-			           (pkt->pktSize + FCS_SIZE));
+			           (pkt->pktSize + ETHER_CRC_LEN));
 			break;
 
 		case 4:
@@ -1421,4 +1421,5 @@ pktgen_gui_main(int argc, char *argv[])
 		printf("Error creating GUI thread\n");
 		return;
 	}
+	rte_thread_setname(inc_x_thread, "Pktgen GUI");
 }

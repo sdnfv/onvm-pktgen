@@ -1,9 +1,7 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
-/* Created 2016 by Keith Wiles @ intel.com */
+/* Created by Keith Wiles @ intel.com */
 
 #ifndef _CLI_H_
 #define _CLI_H_
@@ -37,10 +35,6 @@
 extern "C" {
 #endif
 
-#define CLI_USE_TIMERS 0x0001      /**< call rte_timer_manager() on input */
-#define CLI_NODES_UNLIMITED 0x0002 /**< Allocate nodes with no limit */
-#define CLI_YIELD_IO 0x0004
-
 #define CLI_ROOT_NAME "/"
 #define CLI_BIN_NAME "bin"
 
@@ -71,7 +65,7 @@ typedef enum {
 } node_type_t;
 
 /* Keep this list in sync with the node_type_t enum above */
-#define CLI_NODE_TYPES                                                         \
+#define CLI_NODE_TYPES \
   { "Unknown", "Directory", "Command", "File", "Alias", "String", NULL }
 
 enum {
@@ -169,7 +163,10 @@ RTE_DECLARE_PER_LCORE(struct cli *, cli);
 #define DELETE_CHAR		(1 << 4)
 #define CLEAR_LINE		(1 << 5)
 
-#define CLI_DEFAULT_TREE	(1 << 16)
+#define CLI_USE_TIMERS 		(1 << 8)	/**< call rte_timer_manager() on input */
+#define CLI_NODES_UNLIMITED	(1 << 9)	/**< Allocate nodes with no limit */
+#define CLI_YIELD_IO		(1 << 10)
+#define CLI_DEFAULT_TREE	(1 << 11)
 
 static inline void
 cli_set_flag(uint32_t x)
@@ -929,7 +926,6 @@ int cli_nodes_unlimited(void);
 static inline void
 cli_quit(void)
 {
-	fprintf(stderr, "Quiting....\n");
 	this_cli->quit_flag = 1;
 }
 

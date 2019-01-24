@@ -4,7 +4,7 @@
 #
 #   SPDX-License-Identifier: BSD-3-Clause
 #
-# Created 2010-2017 by Keith Wiles @ intel.com
+# Created 2010-2018 by Keith Wiles @ intel.com
 
 ifeq ($(RTE_SDK),)
 $(error "Please define RTE_SDK environment variable")
@@ -19,41 +19,8 @@ include $(RTE_SDK)/mk/rte.vars.mk
 APP = pktgen
 
 CFLAGS += -O3 -g $(WERROR_FLAGS) -fno-stack-protector
-CFLAGS += -I$(RTE_SRCDIR) -I$(RTE_SRCDIR)/../lib/common
-
-dpdk_ver := $(RTE_SDK)/xusertools/dpdk-version.sh
-pktgen_ver := $(RTE_SRCDIR)/../tools/dpdk-version.sh
-ver_cmd := $(if $(wildcard $(dpdk_ver)),$(dpdk_ver),$(pktgen_ver))
-# $(info ver_cmd=$(ver_cmd))
-
-yy := $(shell $(ver_cmd) -yy)
-# mm := $(shell $(ver_cmd) -mm)
-
-# $(info yy=$(yy))
-
-ifeq ($(yy),17)
-COMMON_PRE := $(RTE_OUTPUT)/../../lib/common
-CLI_PRE := $(RTE_OUTPUT)/../../lib/cli
-GUI_PRE := $(RTE_OUTPUT)/../../gui/gui
-LUA_PRE := $(RTE_OUTPUT)/../../lib/lua/src
-else
-ifeq ($(yy),16)
-COMMON_PRE := $(RTE_SRCDIR)/../lib/common/lib/common
-LUA_PRE := $(RTE_SRCDIR)/../lib/lua/src/lib/lua/src
-CLI_PRE := $(RTE_SRCDIR)/../lib/cli/lib/cli
-GUI_PRE := $(RTE_SRCDIR)/../gui
-else
-COMMON_PRE := $(RTE_SRCDIR)/../lib/common
-LUA_PRE := $(RTE_SRCDIR)/../lib/lua/src
-CLI_PRE := $(RTE_SRCDIR)/../lib/cli
-GUI_PRE := $(RTE_SRCDIR)/../gui/gui
-endif
-endif
-
-COMMON_LIB := $(COMMON_PRE)/$(RTE_TARGET)/lib
-LUA_LIB    := $(LUA_PRE)/$(RTE_TARGET)/lib
-CLI_LIB    := $(CLI_PRE)/$(RTE_TARGET)/lib
-GUI_LIB    := $(GUI_PRE)/$(RTE_TARGET)/lib
+CFLAGS += -I$(RTE_SRCDIR) -D_GNU_SOURCE
+CFLAGS += -DALLOW_EXPERIMENTAL_API
 
 SRCS-y := \
 	cli-functions.c lpktgenlib.c pktgen-cmds.c pktgen.c pktgen-cfg.c \
@@ -64,59 +31,132 @@ SRCS-y := \
 	pktgen-random.c pktgen-display.c pktgen-log.c pktgen-gtpu.c \
 	pktgen-latency.c
 
-COMMON_NAME := libcommon.a
-MYLIBS     += -lcommon
-MYLIB_PATH += -L$(COMMON_LIB)
+dpdk_ver   := $(RTE_SDK)/xusertools/dpdk-version.sh
+pktgen_ver := $(RTE_SRCDIR)/../tools/dpdk-version.sh
+ver_cmd    := $(if $(wildcard $(dpdk_ver)),$(dpdk_ver),$(pktgen_ver))
+yy         := $(shell $(ver_cmd) -yy)
 
-LUA_NAME   := librte_lua.a
-MYLIBS     += -lrte_lua
-MYLIB_PATH += -L$(LUA_LIB)
+# $(info yy=$(yy))
 
-CLI_NAME   := librte_cli.a
-MYLIBS     += -lrte_cli
-MYLIB_PATH += -L$(CLI_LIB)
+COMMON_INC := -I$(RTE_SRCDIR)/../lib/common
+LUA_INC    := -I$(RTE_SRCDIR)/../lib/lua
+CLI_INC    := -I$(RTE_SRCDIR)/../lib/cli
+UTILS_INC  := -I$(RTE_SRCDIR)/../lib/utils
+VEC_INC    := -I$(RTE_SRCDIR)/../lib/vec
+GUI_INC    := -I$(RTE_SRCDIR)/../gui/gui
 
-CFLAGS     += -I$(RTE_SRCDIR)/../lib/common
-COMMON_DEP := $(COMMON_LIB)/$(COMMON_NAME)
+COMMON_LIB := -L$(RTE_SRCDIR)/../lib/common/$(RTE_TARGET)/lib
+LUA_LIB    := -L$(RTE_SRCDIR)/../lib/lua/$(RTE_TARGET)/lib
+CLI_LIB    := -L$(RTE_SRCDIR)/../lib/cli/$(RTE_TARGET)/lib
+UTILS_LIB  := -L$(RTE_SRCDIR)/../lib/utils/$(RTE_TARGET)/lib
+VEC_LIB    := -L$(RTE_SRCDIR)/../lib/vec/$(RTE_TARGET)/lib
+GUI_LIB    := -L$(RTE_SRCDIR)/../gui/$(RTE_TARGET)/lib
 
-ifeq ($(CONFIG_RTE_LIBRTE_CLI),)
-CFLAGS     += -I$(RTE_SRCDIR)/../lib/cli
-CLI_DEP    := $(CLI_LIB)/$(CLI_NAME)
+COMMON_LD  := -lcommon
+LUA_LD     := -lpktgen_lua
+CLI_LD     := -lcli
+UTILS_LD   := -lutils
+VEC_LD     := -lvec
+GUI_LD     := -lgui
+
+# default vars to using common information
+__CFLAGS   := $(COMMON_INC)
+__LIBS     := $(COMMON_LIB)
+__LDFLAGS  := $(COMMON_LD)
+
+ifeq ($(CONFIG_RTE_LIBRTE_LUA),y)
+else
+PKG := $(shell which pkg-config)
+ifeq (x$(PKG),x)
+$(info "pkg-config command is not found using defaults")
+$(info "Get lua-5.3 from lua.org and build it on your system")
+$(info "Also install lua 5.3 into /usr/local/include and /usr/local/lib")
+$(info "Make sure the library in /usr/local/lib is called liblua.a or liblua.so")
+
+# set defaults
+LUA_PKG_LIBS    = -L/usr/local/lib
+LUA_PKG_CFLAGS  = -I/usr/local/include
+LUA_PKG_LDFLAGS = -llua
+else
+LUA_PKG_LIBS    = $(shell pkg-config --silence-errors --libs-only-L lua5.3)
+LUA_PKG_LDFLAGS = $(shell pkg-config --silence-errors --libs-only-l lua5.3)
+LUA_PKG_CFLAGS  = $(shell pkg-config --silence-errors --cflags lua-5.3)
+
+ifeq ($(LUA_PKG_LIBS),)
+LUA_PKG_LIBS = $(shell pkg-config --silence-errors --libs-only-L lua-5.3)
+LUA_PKG_LDFLAGS = $(shell pkg-config --silence-errors --libs-only-l lua-5.3)
+LUA_PKG_CFLAGS = $(shell pkg-config --silence-errors --cflags lua-5.3)
 endif
 
-LUA_DEP    := $(LUA_LIB)/$(LUA_NAME)
-CFLAGS     += -I$(RTE_SRCDIR)/../lib/lua/src
-CFLAGS     += -I$(RTE_SRCDIR)/../lib/lua/lua-5.3.4/src
-
-ifeq ($(CONFIG_RTE_BUILD_SHARED_LIB),y)
-	MYLIBS += -lrte_pmd_ixgbe
-ifeq ($(CONFIG_RTE_LIBRTE_LUA),)
-	RPATHS += -rpath=$(LUA_LIB)
+ifeq ($(LUA_PKG_LIBS),)
+LUA_PKG_LIBS = $(shell pkg-config --silence-errors --libs-only-L lua)
+LUA_PKG_LIBS = $(shell pkg-config --silence-errors --libs-only-l lua)
+LUA_PKG_CFLAGS = $(shell pkg-config --silence-errors --cflags lua)
 endif
-	RPATHS += -rpath=$(COMMON_LIB)
+
+ifeq ($(LUA_PKG_LIBS),)
+$(info "Lua pkg-config was not found")
+$(info "Get lua-5.3 from lua.org and build it on your system")
+$(info "Also install lua 5.3 into /usr/local/include and /usr/local/lib")
+$(info "Make sure the library in /usr/local/lib is called liblua.a")
+
+# set defaults
+LUA_PKG_LIBS    = -L/usr/local/lib
+LUA_PKG_CFLAGS  = -I/usr/local/include
+LUA_PKG_LDFLAGS = -llua
+endif
+endif
+
+# Pktgen Lua support code locations
+__CFLAGS  += $(LUA_INC)
+__LIBS    += $(LUA_LIB)
+__LDFLAGS += $(LUA_LD)
+
+__CFLAGS  += $(LUA_PKG_CFLAGS)
+__LIBS    += $(LUA_PKG_LIBS)
+__LDFLAGS += $(LUA_PKG_LDFLAGS)
+endif
+
+ifeq ($(CONFIG_RTE_LIBRTE_CLI),y)
+else
+__CFLAGS   += $(CLI_INC)
+__LIBS     += $(CLI_LIB)
+__LDFLAGS  += $(CLI_LD)
+endif
+
+ifeq ($(CONFIG_RTE_LIBRTE_UTILS),y)
+else
+__CFLAGS   += $(UTILS_INC)
+__LIBS     += $(UTILS_LIB)
+__LDFLAGS  += $(UTILS_LD)
+endif
+
+ifeq ($(CONFIG_RTE_LIBRTE_VEC),y)
+else
+__CFLAGS   += $(VEC_INC)
+__LIBS     += $(VEC_LIB)
+__LDFLAGS  += $(VEC_LD)
 endif
 
 # GUI support is a work in progress
 ifeq ($(GUI),true)
-	CFLAGS += -DGUI
+	__CFLAGS += -DGUI $(GUI_INC)
 
-	MYLIB_PATH += -L$(GUI_LIB) -L/usr/lib64/gtk-2.0
-	MYLIBS += -lgui \
+	__LIBS += -L$(GUI_LIB) -L/usr/lib64/gtk-2.0 -lgui \
 		$(shell pkg-config --libs glib-2.0) \
 		$(shell pkg-config --libs gtk+-2.0)
-
-	ifeq ($(CONFIG_RTE_BUILD_SHARED_LIB),y)
-		RPATHS += -rpath=$(GUI_LIB)
-	endif
-
 	DEPDIRS-y += ../gui
 endif
 
-# $(info $(CLI_LIB)/$(CLI_NAME))
-# $(info $(MYLIB_PATH))
+ifeq ($(CONFIG_RTE_BUILD_SHARED_LIB),y)
+	__LIBS += -lrte_pmd_ixgbe
+endif
 
-pktgen: $(COMMON_DEP) $(LUA_DEP) $(CLI_DEP)
+CFLAGS  += $(__CFLAGS)
+LDFLAGS += $(__LIBS) $(__LDFLAGS) -lpcap -lm
 
-LDFLAGS += -g -lpcap $(RPATHS) $(MYLIB_PATH) $(MYLIBS) -lm
+#$(info __CLFAGS = $(__CFLAGS))
+#$(info __LIBS = $(__LIBS))
+#$(info __LDFLAGS = $(__LDFLAGS))
 
 include $(RTE_SDK)/mk/rte.extapp.mk

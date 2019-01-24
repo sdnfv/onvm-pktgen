@@ -1,7 +1,5 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
 #ifndef _CLI_SEARCH_H_
@@ -163,9 +161,9 @@ uint32_t cli_path_item_count(uint32_t types);
 * @param path
 *   Path string to scan
 * @return
-*   Pointer to last node in path
+*   Pointer to last directory node in path
 */
-struct cli_node *cli_last_node_in_path(const char *path);
+struct cli_node *cli_last_dir_in_path(const char *path);
 
 /**
 * Scan a directory for a given string matching name

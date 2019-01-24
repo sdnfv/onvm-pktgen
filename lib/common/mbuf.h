@@ -1,5 +1,5 @@
 /*-
- *   Copyright(c) 2014-2017 Intel Corporation. All rights reserved.
+ *   Copyright(c) <2014-2019> Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -7,20 +7,34 @@
 #ifndef _MBUF_H_
 #define _MBUF_H_
 
+#include <rte_atomic.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+union pktgen_data {
+	uint64_t udata;
+	RTE_STD_C11
+	struct {
+		uint16_t data_len;
+		uint16_t buf_len;
+		uint32_t pkt_len;
+	};
+};
+
 static inline void
 pktmbuf_reset(struct rte_mbuf *m)
 {
-	m->next = NULL;
-	m->nb_segs = 1;
-	m->port = 0xff;
+	union pktgen_data d;
 
-	m->data_len = m->pkt_len;
-	m->data_off = (RTE_PKTMBUF_HEADROOM <= m->buf_len) ?
-		RTE_PKTMBUF_HEADROOM : m->buf_len;
+	d.udata = m->udata64;	/* Save the original value */
+
+	rte_pktmbuf_reset(m);
+
+	m->data_len = d.data_len;
+	m->pkt_len = d.pkt_len;
+	m->buf_len = d.buf_len;
 }
 
 /**
@@ -43,7 +57,7 @@ pg_pktmbuf_alloc_bulk(struct rte_mempool *pool,
 	unsigned idx = 0;
 	int rc;
 
-	rc = rte_mempool_get_bulk(pool, (void * *)mbufs, count);
+	rc = rte_mempool_get_bulk(pool, (void **)mbufs, count);
 	if (unlikely(rc))
 		return rc;
 
@@ -55,24 +69,21 @@ pg_pktmbuf_alloc_bulk(struct rte_mempool *pool,
 	switch (count % 4) {
 	case 0:
 		while (idx != count) {
-			rte_mbuf_refcnt_set(mbufs[idx], 1);
 			pktmbuf_reset(mbufs[idx]);
 			idx++;
 			/* fall-through */
-		case 3:
-			rte_mbuf_refcnt_set(mbufs[idx], 1);
+	case 3:
 			pktmbuf_reset(mbufs[idx]);
 			idx++;
 			/* fall-through */
-		case 2:
-			rte_mbuf_refcnt_set(mbufs[idx], 1);
+	case 2:
 			pktmbuf_reset(mbufs[idx]);
 			idx++;
 			/* fall-through */
-		case 1:
-			rte_mbuf_refcnt_set(mbufs[idx], 1);
+	case 1:
 			pktmbuf_reset(mbufs[idx]);
 			idx++;
+			/* fall-through */
 		}
 	}
 	return 0;

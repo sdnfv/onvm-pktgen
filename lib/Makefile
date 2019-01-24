@@ -1,33 +1,34 @@
-#   BSD LICENSE
-#
-#   Copyright(c) 2010-2014 Intel Corporation. All rights reserved.
-#
-#  SPDX-License-Identifier: BSD-3-Clause
-#
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright(c) 2019 Intel Corporation.
 
 include $(RTE_SDK)/mk/rte.vars.mk
 
 DIRS-y += common
-DEPDIRS-y = common
+DEPDIRS-common =
 
-ifeq ($(CONFIG_RTE_LIBRTE_LUA),)
-DIRS-y += lua
-DEPDIRS-y += lua
+ifeq ($(CONFIG_RTE_LIBRTE_UTILS),y)
 else
-ifeq ($(CONFIG_RTE_LIBRTE_LUA),n)
-DIRS-y += lua
-DEPDIRS-y += lua
-endif
+DIRS-y += utils
+DEPDIRS-utils = common
 endif
 
-ifeq ($(CONFIG_RTE_LIBRTE_CLI),)
-DIRS-y += cli
-DEPDIRS-y += cli
+ifeq ($(CONFIG_RTE_LIBRTE_VEC),y)
 else
-ifeq ($(CONFIG_RTE_LIBRTE_CLI),n)
-DIRS-y += cli
-DEPDIRS-y += cli
+DIRS-y += vec
+DEPDIRS-vec += common utils
 endif
+
+ifeq ($(CONFIG_RTE_LIBRTE_CLI),y)
+else
+DIRS-y += cli
+DEPDIRS-cli += utils
+endif
+
+ifeq ($(CONFIG_RTE_LIBRTE_LUA),y)
+else
+DIRS-y += lua
+DEPDIRS-lua += vec utils
+DEPDIRS-cli += lua
 endif
 
 include $(RTE_SDK)/mk/rte.extsubdir.mk

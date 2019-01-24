@@ -1,17 +1,15 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
 #include <fnmatch.h>
 
 #include <rte_string_fns.h>
+#include <rte_strings.h>
 
 #include "cli.h"
 #include "cli_input.h"
 #include "cli_auto_complete.h"
-#include "cli_string_fns.h"
 
 static uint32_t
 _column_count(struct cli_node **nodes, uint32_t node_cnt, uint32_t *len)
@@ -117,7 +115,7 @@ complete_args(int argc, char **argv, uint32_t types)
 					return 0;
 
 			/* if not found get last directory in path */
-			node = cli_last_node_in_path(match);
+			node = cli_last_dir_in_path(match);
 
 			if ((slashes == 1) && (match && (match[0] == '/'))) {
 				match++;

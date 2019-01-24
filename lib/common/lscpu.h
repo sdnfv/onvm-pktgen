@@ -4,10 +4,14 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-/* Created 2014-2017 by Keith Wiles @ intel.com */
+/* Created 2014-2018 by Keith Wiles @ intel.com */
 
 #ifndef __LSCPU_H
 #define __LSCPU_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct action_s {
 	const char  *str;
@@ -37,5 +41,9 @@ typedef struct {
 #define CPU_PROC_PATH   "cat /proc/cpuinfo"
 
 lscpu_t *lscpu_info(const char *lscpu_path, const char *proc_path);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,7 +1,5 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
 #include "cli.h"
@@ -240,6 +238,6 @@ cli_history_dump(void)
 		return;
 
 	CIRCLEQ_FOREACH(h, &cli->hd_hist, next) {
-		printf("%4d: %s\n", i++, h->line);
+		cli_printf("%4d: %s\n", i++, h->line);
 	}
 }

@@ -1,5 +1,5 @@
 ..  BSD LICENSE
-   Copyright(c) 2017 Intel Corporation. All rights reserved.
+   Copyright(c) <2016-2019> Intel Corporation. All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
@@ -278,7 +278,6 @@ find and execute or modify a previous command in history.
 The user can also execute host level commands if enabled using the '@' prefix
 to a command line e.g. @ls or @lspci or ... line is passed to popen or system
 function to be executed and the output displayed on the console if any output.
-To disable set CONFIG_RTE_CLI_HOST_COMMANDS=n in configuration file.
 
 Compiling the Application
 -------------------------
@@ -628,4 +627,3 @@ using the default 'more copyright' command.
 A number of default commands are predefined in the /sbin directory and are
 defined above. Other bin directories can be added to the system if needed,
 but a limit of CLI_MAX_BINS is defined in the cli.h header file.
-

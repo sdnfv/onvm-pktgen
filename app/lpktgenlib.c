@@ -1,5 +1,5 @@
  /*-
- * Copyright (c) <2011-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2011-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -17,12 +17,19 @@
 #include <stdint.h>
 #include <netinet/in.h>
 
+#include <rte_lua.h>
+#include <rte_lua_stdio.h>
+#include <rte_lua_utils.h>
+
 #include "pktgen-cmds.h"
 #include <cli.h>
-#include <rte_net.h>
 #include <luaconf.h>
-#include <lua-socket.h>
 #include <lualib.h>
+
+#include <rte_net.h>
+#include <rte_lua.h>
+#include <rte_lua_stdio.h>
+#include <rte_strings.h>
 
 #include <cli_help.h>
 
@@ -30,9 +37,7 @@
 #pragma GCC diagnostic ignored "-Wcast-qual"
 #endif
 
-/* Defined in lua_shell.c */
-int execute_lua_string(lua_State *L, char *str);
-int dolibrary(lua_State *L, const char *name);
+extern pktgen_t pktgen;
 
 void pktgen_quit(void);
 
@@ -147,7 +152,7 @@ static __inline__ void
 getf_etheraddr(lua_State *L, const char *field, struct ether_addr *value)
 {
 	lua_getfield(L, 3, field);
-	if (lua_isstring(L, 1) )
+	if (lua_isstring(L, -1) )
 		rte_ether_aton(luaL_checkstring(L, -1), value);
 	lua_pop(L, 1);
 }
@@ -156,7 +161,7 @@ static __inline__ void
 getf_ipaddr(lua_State *L, const char *field, void *value, uint32_t flags)
 {
 	lua_getfield(L, 3, field);
-	if (lua_isstring(L, 1) ) {
+	if (lua_isstring(L, -1) ) {
 		rte_atoip((char *)(uintptr_t)luaL_checkstring(L, -1), flags, value,
 				     sizeof(struct pg_ipaddr));
 	}
@@ -169,7 +174,7 @@ getf_integer(lua_State *L, const char *field)
 	uint32_t value = 0;
 
 	lua_getfield(L, 3, field);
-	if (lua_isinteger(L, 1) )
+	if (lua_isinteger(L, -1))
 		value   = luaL_checkinteger(L, -1);
 	lua_pop(L, 1);
 
@@ -182,7 +187,7 @@ getf_string(lua_State *L, const char *field)
 	char      *value = NULL;
 
 	lua_getfield(L, 3, field);
-	if (lua_isstring(L, 1) )
+	if (lua_isstring(L, -1) )
 		value   = (char *)luaL_checkstring(L, -1);
 	lua_pop(L, 1);
 
@@ -217,33 +222,33 @@ pktgen_set(lua_State *L) {
 	value = luaL_checknumber(L, 3);
 
 	foreach_port(portlist, _do(
-			     if (!strcasecmp(what, "count"))
-				     single_set_tx_count(info, value);
-			     else if (!strcasecmp(what, "size"))
-				     single_set_pkt_size(info, value);
-			     else if (!strcasecmp(what, "rate"))
-				     single_set_tx_rate(info, luaL_checkstring(L, 3));
-			     else if (!strcasecmp(what, "burst"))
-				     single_set_tx_burst(info, value);
-			     else if (!strcasecmp(what, "cycles"))
-				     debug_set_tx_cycles(info, value);
-			     else if (!strcasecmp(what, "sport"))
-				     single_set_port_value(info, what[0], value);
-			     else if (!strcasecmp(what, "dport"))
-				     single_set_port_value(info, what[0], value);
-			     else if (!strcasecmp(what, "seq_cnt"))
-				     pktgen_set_port_seqCnt(info, value);
-			     else if (!strcasecmp(what, "seqCnt"))
-				     pktgen_set_port_seqCnt(info, value);
-			     else if (!strcasecmp(what, "prime"))
-				     pktgen_set_port_prime(info, value);
-			     else if (!strcasecmp(what, "dump"))
-				     debug_set_port_dump(info, value);
-			     else
-				     return luaL_error(L,
-						       "set does not support %s",
-						       what);
-			     ) );
+		if (!strcasecmp(what, "count"))
+			single_set_tx_count(info, value);
+		else if (!strcasecmp(what, "size"))
+			single_set_pkt_size(info, value);
+		else if (!strcasecmp(what, "rate"))
+			single_set_tx_rate(info, luaL_checkstring(L, 3));
+		else if (!strcasecmp(what, "burst"))
+			single_set_tx_burst(info, value);
+		else if (!strcasecmp(what, "cycles"))
+			debug_set_tx_cycles(info, value);
+		else if (!strcasecmp(what, "sport"))
+			single_set_port_value(info, what[0], value);
+		else if (!strcasecmp(what, "dport"))
+			single_set_port_value(info, what[0], value);
+		else if (!strcasecmp(what, "seq_cnt"))
+			pktgen_set_port_seqCnt(info, value);
+		else if (!strcasecmp(what, "seqCnt"))
+			pktgen_set_port_seqCnt(info, value);
+		else if (!strcasecmp(what, "prime"))
+			pktgen_set_port_prime(info, value);
+		else if (!strcasecmp(what, "dump"))
+			debug_set_port_dump(info, value);
+		else
+			return luaL_error(L,
+					"set does not support %s",
+					what);
+		) );
 
 	pktgen_update_display();
 	return 0;
@@ -280,6 +285,7 @@ set_seq(lua_State *L, uint32_t seqnum)
 
 	sport   = luaL_checkinteger(L, 7);
 	dport   = luaL_checkinteger(L, 8);
+
 	/* Determine if we are IPv4 or IPv6 packets */
 	ip      = (char *)luaL_checkstring(L, 9);
 	if (ip[3] == '6') {
@@ -303,8 +309,12 @@ set_seq(lua_State *L, uint32_t seqnum)
 	else
 		gtpu_teid = 0;
 
-	cos  = luaL_checkinteger(L, 14);
-	tos  = luaL_checkinteger(L, 15);
+	cos = 0;
+	tos = 0;
+	if (lua_gettop(L) > 13) {
+		cos  = luaL_checkinteger(L, 14);
+		tos  = luaL_checkinteger(L, 15);
+	}
 
 	if ( (proto[0] == 'i') && (ip[3] == '6') ) {
 		lua_putstring("Must use IPv4 with ICMP type packets\n");
@@ -394,12 +404,7 @@ set_seqTable(lua_State *L, uint32_t seqnum)
 	cos         = getf_integer(L, "cos");
 	tos         = getf_integer(L, "tos");
 
-	lua_getfield(L, 3, "gtpu_teid");
-	if (lua_isinteger(L, -1))
-		gtpu_teid   = luaL_checkinteger(L, -1);
-	else
-		gtpu_teid   = 0;
-	lua_pop(L, 1);
+	gtpu_teid = getf_integer(L, "gtpu_teid");
 
 	if ( (ipProto[0] == 'i') && (ethType[3] == '6') ) {
 		lua_putstring("Must use IPv4 with ICMP type packets\n");
@@ -961,6 +966,7 @@ static int
 pktgen_pause(lua_State *L)
 {
 	char *str;
+	int v;
 
 	switch (lua_gettop(L) ) {
 	default: return luaL_error(L, "pause, wrong number of arguments");
@@ -971,7 +977,9 @@ pktgen_pause(lua_State *L)
 	if (strlen(str) > 0)
 		lua_putstring(str);
 
-	__delay(luaL_checkinteger(L, 2));
+	v = luaL_checkinteger(L, 2);
+	__delay(v);
+
 	return 0;
 }
 
@@ -1004,7 +1012,7 @@ pktgen_continue(lua_State *L)
 		lua_putstring(str);
 
 	buf[0] = '\0';
-	n = fread(buf, 1, 1, (FILE *)_get_stdin(L));
+	n = fread(buf, 1, 1, (FILE *)lua_get_stdin(pktgen.ld));
 	if (n > 0)
 		buf[n] = '\0';
 
@@ -1043,7 +1051,7 @@ pktgen_input(lua_State *L)
 	idx = 0;
 	buf[idx] = '\0';
 	while (idx < (sizeof(buf) - 2) ) {
-		n = fread(&c, 1, 1, (FILE *)_get_stdin(L));
+		n = fread(&c, 1, 1, (FILE *)lua_get_stdin(pktgen.ld));
 		if ( (n <= 0) || (c == '\r') || (c == '\n') )
 			break;
 		buf[idx++] = c;
@@ -1591,6 +1599,74 @@ range_vlan_id(lua_State *L)
 
 /**************************************************************************//**
  *
+ * range_cos - Set the CoS in the range data.
+ *
+ * DESCRIPTION
+ * Set the CoS in the range data.
+ *
+ * RETURNS: N/A
+ *
+ * SEE ALSO:
+ */
+
+static int
+range_cos(lua_State *L)
+{
+	portlist_t portlist;
+	uint32_t cos;
+
+	switch (lua_gettop(L) ) {
+	default: return luaL_error(L, "cos, wrong number of arguments");
+	case 3:
+		break;
+	}
+	rte_parse_portlist(luaL_checkstring(L, 1), &portlist);
+	cos = luaL_checkinteger(L, 3);
+
+	foreach_port(portlist,
+		     range_set_cos_id(info, (char *)luaL_checkstring(L, 2),
+					cos) );
+
+	pktgen_update_display();
+	return 0;
+}
+
+/**************************************************************************//**
+ *
+ * range_tos - Set the ToS in the range data.
+ *
+ * DESCRIPTION
+ * Set the ToS in the range data.
+ *
+ * RETURNS: N/A
+ *
+ * SEE ALSO:
+ */
+
+static int
+range_tos(lua_State *L)
+{
+	portlist_t portlist;
+	uint32_t tos;
+
+	switch (lua_gettop(L) ) {
+	default: return luaL_error(L, "tos, wrong number of arguments");
+	case 3:
+		break;
+	}
+	rte_parse_portlist(luaL_checkstring(L, 1), &portlist);
+	tos = luaL_checkinteger(L, 3);
+
+	foreach_port(portlist,
+		     range_set_tos_id(info, (char *)luaL_checkstring(L, 2),
+					tos) );
+
+	pktgen_update_display();
+	return 0;
+}
+
+/**************************************************************************//**
+ *
  * single_vlan_id - Set the VLAN id for a single port
  *
  * DESCRIPTION
@@ -1626,7 +1702,7 @@ single_vlan_id(lua_State *L)
 
 /**************************************************************************//**
  *
- * pktgen_cos - Set the 802.1p prio for a single port
+ * single_cos - Set the 802.1p prio for a single port
  *
  * DESCRIPTION
  * Set the 802.1p cos for a single port.
@@ -1643,11 +1719,11 @@ single_cos(lua_State *L) {
 
 	switch (lua_gettop(L) ) {
 	default: return luaL_error(L, "cos, wrong number of arguments");
-	case 2:
+	case 3:
 		break;
 	}
 	rte_parse_portlist(luaL_checkstring(L, 1), &portlist);
-	cos = luaL_checkinteger(L, 2);
+	cos = luaL_checkinteger(L, 3);
 	if (cos > MAX_COS)
 		cos = 0;
 
@@ -1661,7 +1737,7 @@ single_cos(lua_State *L) {
 
 /**************************************************************************//**
  *
- * pktgen_tos - Set the TOS for a single port
+ * single_tos - Set the TOS for a single port
  *
  * DESCRIPTION
  * Set the TOS for a single port.
@@ -1693,6 +1769,41 @@ single_tos(lua_State *L) {
 
 /**************************************************************************//**
  *
+ * single_vxlan_id - Set the VxLAN for a single port
+ *
+ * DESCRIPTION
+ * Set the VxLAN for a single port.
+ *
+ * RETURNS: N/A
+ *
+ * SEE ALSO:
+ */
+
+static int
+single_vxlan_id(lua_State *L) {
+	portlist_t portlist;
+	uint8_t flags, group_id;
+	uint32_t vxlan_id;
+
+	switch (lua_gettop(L) ) {
+	default: return luaL_error(L, "tos, wrong number of arguments");
+	case 4:
+		break;
+	}
+	rte_parse_portlist(luaL_checkstring(L, 1), &portlist);
+	flags = luaL_checkinteger(L, 2);
+	group_id = luaL_checkinteger(L, 3);
+	vxlan_id = luaL_checkinteger(L, 4);
+
+	foreach_port(portlist,
+	             single_set_vxlan(info, flags, group_id, vxlan_id) );
+
+	pktgen_update_display();
+	return 0;
+}
+
+/**************************************************************************//**
+ *
  * single_vlan - Enable or Disable vlan header
  *
  * DESCRIPTION
@@ -1716,8 +1827,38 @@ single_vlan(lua_State *L)
 	rte_parse_portlist(luaL_checkstring(L, 1), &portlist);
 
 	foreach_port(portlist,
-		     enable_vlan(info,
-				     estate(luaL_checkstring(L, 2))) );
+		     enable_vlan(info, estate(luaL_checkstring(L, 2))) );
+
+	pktgen_update_display();
+	return 0;
+}
+
+/**************************************************************************//**
+ *
+ * single_vxlan - Enable or Disable vxlan header
+ *
+ * DESCRIPTION
+ * Enable or disable insertion of VxLAN header.
+ *
+ * RETURNS: N/A
+ *
+ * SEE ALSO:
+ */
+
+static int
+single_vxlan(lua_State *L)
+{
+	portlist_t portlist;
+
+	switch (lua_gettop(L) ) {
+	default: return luaL_error(L, "process, wrong number of arguments");
+	case 2:
+		break;
+	}
+	rte_parse_portlist(luaL_checkstring(L, 1), &portlist);
+
+	foreach_port(portlist,
+		     enable_vxlan(info, estate(luaL_checkstring(L, 2))) );
 
 	pktgen_update_display();
 	return 0;
@@ -2747,6 +2888,7 @@ port_stats(lua_State *L, port_info_t *info, char *type)
 	setf_integer(L, "ierrors", stats.ierrors);
 	setf_integer(L, "oerrors", stats.oerrors);
 	setf_integer(L, "rx_nombuf", stats.rx_nombuf);
+	setf_integer(L, "imissed", stats.imissed);
 
 	if (strcmp(type, "rate") == 0) {
 		setf_integer(L, "pkts_rx", stats.ipackets);
@@ -2924,7 +3066,7 @@ decompile_pkt(lua_State *L, port_info_t *info, uint32_t seqnum)
 			    (p->ipProto == PG_IPPROTO_TCP) ? "tcp" :
 			    (p->ipProto == PG_IPPROTO_ICMP) ? "icmp" : "udp"));
 
-	setf_integer(L, "pktSize", p->pktSize + FCS_SIZE);
+	setf_integer(L, "pktSize", p->pktSize + ETHER_CRC_LEN);
 	setf_integer(L, "gtpu_teid", p->gtpu_teid);
 
 	/* Now set the table as an array with pid as the index. */
@@ -3232,7 +3374,7 @@ pktgen_run(lua_State *L)
 	if (strcasecmp("cmd", luaL_checkstring(L, 1)) == 0)
 		cli_execute_cmdfile(luaL_checkstring(L, 2));
 	else if (strcasecmp("lua", luaL_checkstring(L, 1)) == 0)/* Only a Lua script in memory. */
-		execute_lua_string(L, (char *)luaL_checkstring(L, 2));
+		lua_execute_string(pktgen.ld, (char *)luaL_checkstring(L, 2));
 	else
 		return luaL_error(L, "run( ['cmd'|'lua'], <string>), arguments wrong.");
 
@@ -3397,18 +3539,18 @@ pktgen_lua_help(lua_State *L)
 
 static const luaL_Reg pktgenlib_range[] = {
 	/* Range commands */
-	{"dst_mac",       range_dst_mac},		/* Set the destination MAC address for a port */
-	{"src_mac",       range_src_mac},		/* Set the src MAC address for a port */
-	{"src_ip",        range_src_ip},		/* Set the source IP address and netmask value */
-	{"dst_ip",        range_dst_ip},		/* Set the destination IP address */
-	{"ip_proto",      range_ip_proto},		/* Set the IP Protocol type */
-	{"src_port",      range_src_port},		/* Set the IP source port number */
-	{"dst_port",      range_dst_port},		/* Set the IP destination port number */
-	{"vlan_id",       range_vlan_id},		/* Set the vlan id value */
+	{"dst_mac",       range_dst_mac},	/* Set the destination MAC address for a port */
+	{"src_mac",       range_src_mac},	/* Set the src MAC address for a port */
+	{"src_ip",        range_src_ip},	/* Set the source IP address and netmask value */
+	{"dst_ip",        range_dst_ip},	/* Set the destination IP address */
+	{"ip_proto",      range_ip_proto},	/* Set the IP Protocol type */
+	{"src_port",      range_src_port},	/* Set the IP source port number */
+	{"dst_port",      range_dst_port},	/* Set the IP destination port number */
+	{"vlan_id",       range_vlan_id},	/* Set the vlan id value */
 	{"mpls_entry",    range_mpls_entry},	/* Set the MPLS entry value */
-	{"qinqids",       range_qinqids},		/* Set the Q-in-Q ID values */
-	{"gre_key",       range_gre_key},		/* Set the GRE key */
-	{"pkt_size",      range_pkt_size},		/* the packet size for a range port */
+	{"qinqids",       range_qinqids},	/* Set the Q-in-Q ID values */
+	{"gre_key",       range_gre_key},	/* Set the GRE key */
+	{"pkt_size",      range_pkt_size},	/* the packet size for a range port */
 	{NULL, NULL}
 };
 
@@ -3459,7 +3601,9 @@ static const luaL_Reg pktgenlib[] = {
 	{"vlanid",        single_vlan_id},	/* Set the vlan ID for a given portlist */
 
 	{"cos",           single_cos},		/* Set the prio for a given portlist */
-	{"tos",           single_tos},	/* Set the tos for a given portlist */
+	{"tos",           single_tos},		/* Set the tos for a given portlist */
+	{"vxlan",         single_vxlan},	/* Enable or disable VxLAN */
+	{"vxlan_id",      single_vxlan_id},	/* Set the VxLAN values */
 
 
 	{"mpls",          pktgen_mpls},		/* Enable or disable MPLS header */
@@ -3476,11 +3620,13 @@ static const luaL_Reg pktgenlib[] = {
 	{"src_port",      range_src_port},		/* Set the IP source port number */
 	{"dst_port",      range_dst_port},		/* Set the IP destination port number */
 	{"vlan_id",       range_vlan_id},		/* Set the vlan id value */
-	{"mpls_entry",    range_mpls_entry},	/* Set the MPLS entry value */
+	{"mpls_entry",    range_mpls_entry},		/* Set the MPLS entry value */
 	{"qinqids",       range_qinqids},		/* Set the Q-in-Q ID values */
 	{"gre_key",       range_gre_key},		/* Set the GRE key */
 	{"pkt_size",      range_pkt_size},		/* the packet size for a range port */
-	{"set_range",     range},				/* Enable or disable sending range data on a port. */
+	{"cos",           range_cos},			/* Set the COS value */
+	{"tos",           range_tos},			/* Set the COS value */
+	{"set_range",     range},			/* Enable or disable sending range data on a port. */
 
 	{"ports_per_page", pktgen_ports_per_page},	/* Set the number of ports per page */
 	{"page",          pktgen_page},			/* Select a page to display, seq, range, pcap and a number from 0-N */
@@ -3567,8 +3713,8 @@ luaopen_pktgen(lua_State *L)
 	setf_integer(L, "numExtraTxPkts", NUM_EXTRA_TX_PKTS);
 	setf_integer(L, "numTotalPkts", NUM_TOTAL_PKTS);
 
-	setf_integer(L, "minPktSize", MIN_PKT_SIZE + FCS_SIZE);
-	setf_integer(L, "maxPktSize", MAX_PKT_SIZE + FCS_SIZE);
+	setf_integer(L, "minPktSize", MIN_PKT_SIZE + ETHER_CRC_LEN);
+	setf_integer(L, "maxPktSize", MAX_PKT_SIZE + ETHER_CRC_LEN);
 	setf_integer(L, "minVlanID", MIN_VLAN_ID);
 	setf_integer(L, "maxVlanID", MAX_VLAN_ID);
 	setf_integer(L, "vlanTagSize", VLAN_TAG_SIZE);
@@ -3580,7 +3726,7 @@ luaopen_pktgen(lua_State *L)
 	setf_integer(L, "maxTOS", MAX_TOS);
 
 	setf_integer(L, "defaultPktBurst", DEFAULT_PKT_BURST);
-	setf_integer(L, "defaultBuffSize", MBUF_SIZE);
+	setf_integer(L, "defaultBuffSize", DEFAULT_MBUF_SIZE);
 	setf_integer(L, "maxMbufsPerPort", MAX_MBUFS_PER_PORT);
 	setf_integer(L, "maxPrimeCount", MAX_PRIME_COUNT);
 
@@ -3599,7 +3745,7 @@ luaopen_pktgen(lua_State *L)
 
 /**************************************************************************//**
  *
- * _lua_openlib - Open the Pktgen Lua library.
+ * pktgen_lua_openlib - Open the Pktgen Lua library.
  *
  * DESCRIPTION
  * Open and initialize the Pktgen Lua Library.
@@ -3610,16 +3756,12 @@ luaopen_pktgen(lua_State *L)
  */
 
 void
-_lua_openlib(lua_State *L)
+pktgen_lua_openlib(lua_State *L)
 {
 	lua_gc(L, LUA_GCSTOP, 0);	/* stop collector during initialization */
-
-	luaL_openlibs(L);	/* open libraries */
 
 	luaL_requiref(L, LUA_PKTGENLIBNAME, luaopen_pktgen, 1);
 	lua_pop(L, 1);
 
 	lua_gc(L, LUA_GCRESTART, 0);
-
-	assert(dolibrary(L, PKTGEN_SHORTCUTS) == LUA_OK);
 }

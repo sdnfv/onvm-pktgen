@@ -1,10 +1,8 @@
-/*-
- * Copyright(c) 2015-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
-/* Created 2017 by Keith Wiles @ intel.com */
+/* Created by Keith Wiles @ intel.com */
 
 #ifndef __CLI_SCRN_H_
 #define __CLI_SCRN_H_

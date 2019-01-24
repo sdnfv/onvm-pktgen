@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2014-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2014-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -10,6 +10,10 @@
 #define __COREMAP_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define PROC_CPUINFO "/proc/cpuinfo"
 
@@ -29,5 +33,9 @@ int coremap(const char *opt,
 		   const char *proc_cpuinfo);
 unsigned coremap_cnt(const lc_info_t *lc, unsigned max_cnt,
 			    unsigned t);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /*_COREMAP_H */

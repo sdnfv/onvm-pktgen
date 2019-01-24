@@ -1,14 +1,15 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 /* Created 2010 by Keith Wiles @ intel.com */
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <sys/stat.h>
+
+#include <rte_lua.h>
 
 #include "pktgen.h"
 
@@ -157,7 +158,7 @@ pktgen_script_save(char *path)
 		fprintf(fd, "#\n# Set up the primary port information:\n");
 		fprintf(fd, "set %d count %" PRIu64 "\n", info->pid,
 			rte_atomic64_read(&info->transmit_count));
-		fprintf(fd, "set %d size %d\n", info->pid, pkt->pktSize + FCS_SIZE);
+		fprintf(fd, "set %d size %d\n", info->pid, pkt->pktSize + ETHER_CRC_LEN);
 		fprintf(fd, "set %d rate %g\n", info->pid, info->tx_rate);
 		fprintf(fd, "set %d burst %d\n", info->pid, info->tx_burst);
 		fprintf(fd, "set %d sport %d\n", info->pid, pkt->sport);
@@ -191,9 +192,9 @@ pktgen_script_save(char *path)
 			(info->fill_pattern_type ==
 			 ZERO_FILL_PATTERN) ? "zero" : "user");
 		if ((info->fill_pattern_type == USER_FILL_PATTERN) && strlen(info->user_pattern)) {
-			char buff[32];
+			char buff[64];
 			memset(buff, 0, sizeof(buff));
-			strncpy(buff, info->user_pattern, sizeof(info->user_pattern));
+			snprintf(buff, sizeof(buff), "%s", info->user_pattern);
 			fprintf(fd, "set %d user pattern %s\n", i, buff);
 		}
 		fprintf(fd, "\n");
@@ -201,8 +202,8 @@ pktgen_script_save(char *path)
 		fprintf(fd, "set %d jitter %" PRIu64 "\n", i, info->jitter_threshold);
 		fprintf(fd, "%sable %d mpls\n",
 			(flags & SEND_MPLS_LABEL) ? "en" : "dis", i);
-		sprintf(buff, "%x", pkt->mpls_entry);
-		fprintf(fd, "set %d mpls_entry %s\n", i, buff);
+		sprintf(buff, "0x%x", pkt->mpls_entry);
+		fprintf(fd, "range %d mpls entry %s\n", i, buff);
 
 		fprintf(fd, "%sable %d qinq\n",
 			(flags & SEND_Q_IN_Q_IDS) ? "en" : "dis", i);
@@ -214,6 +215,11 @@ pktgen_script_save(char *path)
 		fprintf(fd, "%sable %d gre_eth\n",
 			(flags & SEND_GRE_ETHER_HEADER) ? "en" : "dis", i);
 		fprintf(fd, "set %d gre_key %d\n", i, pkt->gre_key);
+
+		fprintf(fd, "%sable %d vxlan\n",
+			(flags & SEND_VXLAN_PACKETS) ? "en" : "dis", i);
+		fprintf(fd, "set %d vxlan 0x%x %d %d\n", i,
+			pkt->vni_flags, pkt->group_id, pkt->vxlan_id);
 
 		fprintf(fd, "#\n# Port flag values:\n");
 		fprintf(fd, "%sable %d icmp\n",
@@ -328,11 +334,11 @@ pktgen_script_save(char *path)
 
 		fprintf(fd, "\n");
 		fprintf(fd, "range %d size start %d\n", i,
-			range->pkt_size + FCS_SIZE);
+			range->pkt_size + ETHER_CRC_LEN);
 		fprintf(fd, "range %d size min %d\n", i,
-			range->pkt_size_min + FCS_SIZE);
+			range->pkt_size_min + ETHER_CRC_LEN);
 		fprintf(fd, "range %d size max %d\n", i,
-			range->pkt_size_max + FCS_SIZE);
+			range->pkt_size_max + ETHER_CRC_LEN);
 		fprintf(fd, "range %d size inc %d\n\n", i, range->pkt_size_inc);
 
 		fprintf(fd, "#\n# Set up the sequence data for the port.\n");
@@ -368,7 +374,7 @@ pktgen_script_save(char *path)
 				(pkt->ipProto ==
 				 PG_IPPROTO_ICMP) ? "icmp" : "udp",
 				pkt->vlanid,
-				pkt->pktSize + FCS_SIZE,
+				pkt->pktSize + ETHER_CRC_LEN,
 				pkt->gtpu_teid);
 		}
 
@@ -437,6 +443,9 @@ pktgen_lua_save(char *path)
 	fprintf(fd, "--\n-- Pktgen - %s\n", pktgen_version());
 	fprintf(fd, "-- %s, %s\n\n", copyright_msg(), powered_by());
 
+	fprintf(fd, "package.path = package.path ..\";?.lua;test/?.lua;app/?.lua;\"\n");
+	fprintf(fd, "require \"Pktgen\"\n\n");
+
 	/* TODO: Determine DPDK arguments for rank and memory, default for now. */
 	fprintf(fd, "-- Command line arguments: (DPDK args are defaults)\n");
 	fprintf(fd, "-- %s -c %" PRIx64 " -n 3 -m 512 --proc-type %s -- ",
@@ -496,7 +505,7 @@ pktgen_lua_save(char *path)
 		fprintf(fd, "--\n-- Set up the primary port information:\n");
 		fprintf(fd, "pktgen.set('%d', 'count', %" PRIu64 ");\n", info->pid,
 			rte_atomic64_read(&info->transmit_count));
-		fprintf(fd, "pktgen.set('%d', 'size', %d);\n", info->pid, pkt->pktSize + FCS_SIZE);
+		fprintf(fd, "pktgen.set('%d', 'size', %d);\n", info->pid, pkt->pktSize + ETHER_CRC_LEN);
 		fprintf(fd, "pktgen.set('%d', 'rate', %g);\n", info->pid, info->tx_rate);
 		fprintf(fd, "pktgen.set('%d', 'burst', %d);\n", info->pid, info->tx_burst);
 		fprintf(fd, "pktgen.set('%d', 'sport', %d);\n", info->pid, pkt->sport);
@@ -528,9 +537,9 @@ pktgen_lua_save(char *path)
 			(info->fill_pattern_type ==
 			 ZERO_FILL_PATTERN) ? "zero" : "user");
 		if ((info->fill_pattern_type == USER_FILL_PATTERN) && strlen(info->user_pattern)) {
-			char buff[32];
+			char buff[64];
 			memset(buff, 0, sizeof(buff));
-			strncpy(buff, info->user_pattern, sizeof(info->user_pattern));
+			snprintf(buff, sizeof(buff), "%s", info->user_pattern);
 			fprintf(fd, "pktgen.userPattern('%d', '%s');\n", i, buff);
 		}
 		fprintf(fd, "\n");
@@ -539,7 +548,7 @@ pktgen_lua_save(char *path)
 		fprintf(fd, "pktgen.jitter('%d', %lu);\n", i, info->jitter_threshold);
 		fprintf(fd, "pktgen.mpls('%d', '%sable');\n", i,
 			(flags & SEND_MPLS_LABEL) ? "en" : "dis");
-		sprintf(buff, "%x", pkt->mpls_entry);
+		sprintf(buff, "0x%x", pkt->mpls_entry);
 		fprintf(fd, "pktgen.mpls_entry('%d', '%s');\n", i, buff);
 
 		fprintf(fd, "pktgen.qinq('%d', '%sable');\n", i,
@@ -552,6 +561,11 @@ pktgen_lua_save(char *path)
 		fprintf(fd, "pktgen.gre_eth('%d', '%sable');\n", i,
 			(flags & SEND_GRE_ETHER_HEADER) ? "en" : "dis");
 		fprintf(fd, "pktgen.gre_key('%d', %d);\n", i, pkt->gre_key);
+
+		fprintf(fd, "pkrgen.vxlan('%d', '%sable');\n", i,
+			(flags & SEND_VXLAN_PACKETS) ? "en" : "dis");
+		fprintf(fd, "pktgen.vxlan_id('%d', '0x%x', '%d', '%d');\n", i,
+				pkt->vni_flags, pkt->group_id, pkt->vxlan_id);
 
 		fprintf(fd, "--\n-- Port flag values:\n");
 		fprintf(fd, "pktgen.icmp_echo('%d', '%sable');\n", i,
@@ -610,7 +624,7 @@ pktgen_lua_save(char *path)
 		fprintf(fd, "pktgen.src_ip('%d', 'max', '%s');\n", i,
 			inet_ntop4(buff, sizeof(buff), ntohl(range->src_ip_max),
 				   0xFFFFFFFF));
-		fprintf(fd, "pktgen.src_ip(';%d', 'inc', '%s');\n", i,
+		fprintf(fd, "pktgen.src_ip('%d', 'inc', '%s');\n", i,
 			inet_ntop4(buff, sizeof(buff), ntohl(range->src_ip_inc),
 				   0xFFFFFFFF));
 
@@ -666,11 +680,11 @@ pktgen_lua_save(char *path)
 
 		fprintf(fd, "\n");
 		fprintf(fd, "pktgen.pkt_size('%d', 'start', %d);\n", i,
-			range->pkt_size + FCS_SIZE);
+			range->pkt_size + ETHER_CRC_LEN);
 		fprintf(fd, "pktgen.pkt_size('%d', 'min', %d);\n", i,
-			range->pkt_size_min + FCS_SIZE);
+			range->pkt_size_min + ETHER_CRC_LEN);
 		fprintf(fd, "pktgen.pkt_size('%d', 'max', %d);\n", i,
-			range->pkt_size_max + FCS_SIZE);
+			range->pkt_size_max + ETHER_CRC_LEN);
 		fprintf(fd, "pktgen.pkt_size('%d', 'inc', %d);\n\n", i, range->pkt_size_inc);
 
 		fprintf(fd, "--\n-- Set up the sequence data for the port.\n");
@@ -711,7 +725,7 @@ pktgen_lua_save(char *path)
 					(pkt->ipProto ==
 					 PG_IPPROTO_ICMP) ? "icmp" : "udp",
 					pkt->vlanid,
-					pkt->pktSize + FCS_SIZE,
+					pkt->pktSize + ETHER_CRC_LEN,
 					pkt->gtpu_teid);
 			}
 			fflush(fd);
@@ -963,23 +977,24 @@ pktgen_flags_string(port_info_t *info)
 
 	snprintf(buff, sizeof(buff), "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
 		 (pktgen.flags & PROMISCUOUS_ON_FLAG)   ? 'P' : '-',
-		 (flags & ICMP_ECHO_ENABLE_FLAG)    ? 'E' : '-',
-		 (flags & SEND_ARP_REQUEST)     ? 'A' : '-',
-		 (flags & SEND_GRATUITOUS_ARP)      ? 'G' : '-',
-		 (flags & SEND_PCAP_PKTS)       ? 'p' : '-',
-		 (flags & SEND_SEQ_PKTS)        ? 'S' : '-',
-		 (flags & SEND_RANGE_PKTS)      ? 'R' : '-',
-		 (flags & PROCESS_INPUT_PKTS)       ? 'I' : '-',
-		 "-rt*"[(flags & (PROCESS_RX_TAP_PKTS | PROCESS_TX_TAP_PKTS)) >> 9],
-		 (flags & SEND_LATENCY_PKTS)        ? 'L' : '-',
-		 (flags & SEND_VLAN_ID)         ? 'V' :
-		 (flags & SEND_MPLS_LABEL)        ? 'M' :
-		 (flags & SEND_Q_IN_Q_IDS)        ? 'Q' : '-',
-		 (flags & PROCESS_GARP_PKTS)        ? 'g' : '-',
-		 (flags & SEND_GRE_IPv4_HEADER)     ? 'g' :
-		 (flags & SEND_GRE_ETHER_HEADER)  ? 'G' : '-',
-		 (flags & CAPTURE_PKTS)         ? 'C' : '-',
-		 (flags & SEND_RANDOM_PKTS)     ? 'r' : '-');
+		 (flags & ICMP_ECHO_ENABLE_FLAG)	? 'E' : '-',
+		 (flags & SEND_ARP_REQUEST)		? 'A' : '-',
+		 (flags & SEND_GRATUITOUS_ARP)		? 'G' : '-',
+		 (flags & SEND_PCAP_PKTS)		? 'p' : '-',
+		 (flags & SEND_SEQ_PKTS)		? 'S' : '-',
+		 (flags & SEND_RANGE_PKTS)		? 'R' : '-',
+		 (flags & PROCESS_INPUT_PKTS)		? 'I' : '-',
+		 	"-rt*"[(flags & (PROCESS_RX_TAP_PKTS | PROCESS_TX_TAP_PKTS)) >> 9],
+		 (flags & SEND_LATENCY_PKTS)		? 'L' : '-',
+		 (flags & SEND_VLAN_ID)			? 'V' :
+		 	(flags & SEND_VXLAN_PACKETS)	? 'X' :
+		 	(flags & SEND_MPLS_LABEL)	? 'M' :
+		 	(flags & SEND_Q_IN_Q_IDS)	? 'Q' : '-',
+		 (flags & PROCESS_GARP_PKTS)		? 'g' : '-',
+		 (flags & SEND_GRE_IPv4_HEADER)		? 'g' :
+		 (flags & SEND_GRE_ETHER_HEADER)	? 'G' : '-',
+		 (flags & CAPTURE_PKTS)			? 'C' : '-',
+		 (flags & SEND_RANDOM_PKTS)		? 'r' : '-');
 
 	return buff;
 }
@@ -1397,10 +1412,10 @@ pktgen_start_transmitting(port_info_t *info)
 		rte_atomic64_set(&info->current_tx_count,
 				 rte_atomic64_read(&info->transmit_count));
 
-		pktgen_set_port_flags(info, SENDING_PACKETS);
-
 		if (rte_atomic64_read(&info->current_tx_count) == 0)
 			pktgen_set_port_flags(info, SEND_FOREVER);
+
+		pktgen_set_port_flags(info, SENDING_PACKETS);
 	}
 }
 
@@ -1748,6 +1763,31 @@ single_set_pkt_type(port_info_t *info, const char *type)
 
 /**************************************************************************//**
  *
+ * enable_vxlan - Set the port to send a VxLAN ID
+ *
+ * DESCRIPTION
+ * Set the given port list to send VxLAN ID packets.
+ *
+ * RETURNS: N/A
+ *
+ * SEE ALSO:
+ */
+
+void
+enable_vxlan(port_info_t *info, uint32_t onOff)
+{
+	if (onOff == ENABLE_STATE) {
+		pktgen_clr_port_flags(info, SEND_MPLS_LABEL);
+		pktgen_clr_port_flags(info, SEND_VLAN_ID);
+		pktgen_clr_port_flags(info, SEND_Q_IN_Q_IDS);
+		pktgen_set_port_flags(info, SEND_VXLAN_PACKETS);
+	} else
+		pktgen_clr_port_flags(info, SEND_VXLAN_PACKETS);
+	pktgen_packet_ctor(info, SINGLE_PKT, -1);
+}
+
+/**************************************************************************//**
+ *
  * enable_vlan - Set the port to send a VLAN ID
  *
  * DESCRIPTION
@@ -1763,6 +1803,7 @@ enable_vlan(port_info_t *info, uint32_t onOff)
 {
 	if (onOff == ENABLE_STATE) {
 		pktgen_clr_port_flags(info, SEND_MPLS_LABEL);
+		pktgen_clr_port_flags(info, SEND_VXLAN_PACKETS);
 		pktgen_clr_port_flags(info, SEND_Q_IN_Q_IDS);
 		pktgen_set_port_flags(info, SEND_VLAN_ID);
 	} else
@@ -1833,10 +1874,30 @@ single_set_tos(port_info_t *info, uint8_t tos)
 	pktgen_packet_ctor(info, SINGLE_PKT, -1);
 }
 
+/**************************************************************************//**
+ *
+ * single_set_vxlan - Set the port vxlan value
+ *
+ * DESCRIPTION
+ * Set the given port list with the given vxlan
+ *
+ * RETURNS: N/A
+ *
+ * SEE ALSO:
+ */
 
-
-
-
+void
+single_set_vxlan(port_info_t *info, uint16_t flags, uint16_t group_id,
+		uint32_t vxlan_id)
+{
+	info->vni_flags = flags;
+	info->group_id = group_id;
+	info->vxlan_id = vxlan_id;
+	info->seq_pkt[SINGLE_PKT].vni_flags = info->vni_flags;
+	info->seq_pkt[SINGLE_PKT].group_id = info->group_id;
+	info->seq_pkt[SINGLE_PKT].vxlan_id = info->vxlan_id;
+	pktgen_packet_ctor(info, SINGLE_PKT, -1);
+}
 
 /**************************************************************************//**
  *
@@ -1856,6 +1917,7 @@ enable_mpls(port_info_t *info, uint32_t onOff)
 	if (onOff == ENABLE_STATE) {
 		pktgen_clr_port_flags(info, SEND_VLAN_ID);
 		pktgen_clr_port_flags(info, SEND_Q_IN_Q_IDS);
+		pktgen_clr_port_flags(info, SEND_VXLAN_PACKETS);
 		pktgen_set_port_flags(info, SEND_MPLS_LABEL);
 	} else
 		pktgen_clr_port_flags(info, SEND_MPLS_LABEL);
@@ -1900,6 +1962,7 @@ enable_qinq(port_info_t *info, uint32_t onOff)
 	if (onOff == ENABLE_STATE) {
 		pktgen_clr_port_flags(info, SEND_VLAN_ID);
 		pktgen_clr_port_flags(info, SEND_MPLS_LABEL);
+		pktgen_clr_port_flags(info, SEND_VXLAN_PACKETS);
 		pktgen_set_port_flags(info, SEND_Q_IN_Q_IDS);
 	} else
 		pktgen_clr_port_flags(info, SEND_Q_IN_Q_IDS);
@@ -1996,7 +2059,7 @@ enable_gre_eth(port_info_t *info, uint32_t onOff)
 
 /**************************************************************************//**
  *
- * pktgen_set_gre_key - Set the port GRE key
+ * range_set_gre_key - Set the port GRE key
  *
  * DESCRIPTION
  * Set the given port list with the given GRE key.
@@ -2445,20 +2508,20 @@ single_set_pkt_size(port_info_t *info, uint16_t size)
 {
 	pkt_seq_t * pkt = &info->seq_pkt[SINGLE_PKT];
 
-	if (size < FCS_SIZE)
-		size = FCS_SIZE;
+	if (size < ETHER_CRC_LEN)
+		size = ETHER_CRC_LEN;
 
 	if (!(rte_atomic32_read(&info->port_flags) & SEND_SHORT_PACKETS)) {
-		if ( (size - FCS_SIZE) < MIN_PKT_SIZE)
-			size = (MIN_PKT_SIZE + FCS_SIZE);
+		if ( (size - ETHER_CRC_LEN) < MIN_PKT_SIZE)
+			size = (MIN_PKT_SIZE + ETHER_CRC_LEN);
 	}
-	if ( (size - FCS_SIZE) > MAX_PKT_SIZE)
-		size = MAX_PKT_SIZE + FCS_SIZE;
+	if ( (size - ETHER_CRC_LEN) > MAX_PKT_SIZE)
+		size = MAX_PKT_SIZE + ETHER_CRC_LEN;
 
-	if ((pkt->ethType == ETHER_TYPE_IPv6) && (size < (MIN_v6_PKT_SIZE + FCS_SIZE)))
-		size = MIN_v6_PKT_SIZE + FCS_SIZE;
+	if ((pkt->ethType == ETHER_TYPE_IPv6) && (size < (MIN_v6_PKT_SIZE + ETHER_CRC_LEN)))
+		size = MIN_v6_PKT_SIZE + ETHER_CRC_LEN;
 
-	pkt->pktSize = (size - FCS_SIZE);
+	pkt->pktSize = (size - ETHER_CRC_LEN);
 
 	pktgen_packet_ctor(info, SINGLE_PKT, -1);
 	pktgen_packet_rate(info);
@@ -2591,6 +2654,10 @@ void
 enable_range(port_info_t *info, uint32_t state)
 {
 	if (state == ENABLE_STATE) {
+		if (rte_atomic32_read(&info->port_flags) & SENDING_PACKETS) {
+			pktgen_log_warning("Cannot enable the range settings while sending packets!");
+			return;
+		}
 		pktgen_clr_port_flags(info, SEND_SEQ_PKTS);
 		pktgen_clr_port_flags(info, SEND_PCAP_PKTS);
 		pktgen_set_port_flags(info, SEND_RANGE_PKTS);
@@ -2693,7 +2760,7 @@ pattern_set_user_pattern(port_info_t *info, char *str)
 		cp++;
 	}
 	memset(info->user_pattern, 0, USER_PATTERN_SIZE);
-	strncpy(info->user_pattern, cp, USER_PATTERN_SIZE);
+	snprintf(info->user_pattern, USER_PATTERN_SIZE, "%s", cp);
 	info->fill_pattern_type = USER_FILL_PATTERN;
 }
 
@@ -2758,7 +2825,7 @@ range_set_src_mac(port_info_t *info, const char *what,
 
 /**************************************************************************//**
  *
- * pktgen_set_src_ip - Set the source IP address value.
+ * range_set_src_ip - Set the source IP address value.
  *
  * DESCRIPTION
  * Set the source IP address for all of the ports listed.
@@ -2867,7 +2934,7 @@ range_set_gtpu_teid(port_info_t *info, char *what, uint32_t teid)
 
 /**************************************************************************//**
  *
- * pktgen_set_dst_port - Set the destination port value
+ * range_set_dst_port - Set the destination port value
  *
  * DESCRIPTION
  * Set the destination port values.
@@ -2944,13 +3011,8 @@ range_set_tos_id(port_info_t *info, char *what, uint8_t id)
 {
 
 	if (!strcmp(what, "inc") || !strcmp(what, "increment")) {
-		// if (id > 255)
-		// 	id = 255;
 		info->range.tos_inc = id;
 	} else {
-		/*if ( (id < MIN_TOS) || (id > MAX_TOS) )*/
-		/*id = 160 MIN_TOS;*/
-
 		if (!strcmp(what, "min") || !strcmp(what, "minimum"))
 			info->range.tos_min = id;
 		else if (!strcmp(what, "max") || !strcmp(what, "maximum"))
@@ -2980,9 +3042,6 @@ range_set_cos_id(port_info_t *info, char *what, uint8_t id)
 			id = 7;
 		info->range.cos_inc = id;
 	} else {
-		/*if ( (id < MIN_COS) || (id > MAX_COS) )
-		id = MIN_COS;*/
-
 		if (!strcmp(what, "min") || !strcmp(what, "minimum"))
 			info->range.cos_min = id;
 		else if (!strcmp(what, "max") || !strcmp(what, "maximum"))
@@ -3008,9 +3067,8 @@ void
 range_set_pkt_size(port_info_t *info, char *what, uint16_t size)
 {
 	if (!strcmp(what, "inc") || !strcmp(what, "increment")) {
-		if (size > ETHER_MIN_LEN)
-			size = ETHER_MIN_LEN;
-
+		if (size > ETHER_MAX_LEN)
+			size = ETHER_MAX_LEN;
 		info->range.pkt_size_inc = size;
 	} else {
 		if (size < ETHER_MIN_LEN)
@@ -3018,7 +3076,7 @@ range_set_pkt_size(port_info_t *info, char *what, uint16_t size)
 		else if (size > ETHER_MAX_LEN)
 			size = MAX_PKT_SIZE;
 		else
-			size -= FCS_SIZE;
+			size -= ETHER_CRC_LEN;
 
 		if (!strcmp(what, "start") )
 			info->range.pkt_size = size;
@@ -3106,6 +3164,9 @@ pktgen_set_page(char *str)
 	} else if (_cp("stats")) {
 		pktgen.flags &= ~PAGE_MASK_BITS;
 		pktgen.flags |= STATS_PAGE_FLAG;
+	} else if (_cp("xstats")) {
+		pktgen.flags &= ~PAGE_MASK_BITS;
+		pktgen.flags |= XSTATS_PAGE_FLAG;
 	} else if (_cp("sequence") || _cp("seq")) {
 		pktgen.flags &= ~PAGE_MASK_BITS;
 		pktgen.flags |= SEQUENCE_PAGE_FLAG;
@@ -3182,7 +3243,7 @@ pktgen_set_seq(port_info_t *info, uint32_t seqnum,
 	}
 	pkt->dport          = dport;
 	pkt->sport          = sport;
-	pkt->pktSize        = pktsize - FCS_SIZE;
+	pkt->pktSize        = pktsize - ETHER_CRC_LEN;
 	pkt->ipProto        = (proto == 'u') ? PG_IPPROTO_UDP :
 		(proto == 'i') ? PG_IPPROTO_ICMP : PG_IPPROTO_TCP;
 	/* Force the IP protocol to IPv4 if this is a ICMP packet. */
@@ -3202,6 +3263,18 @@ pktgen_set_cos_tos_seq(port_info_t *info, uint32_t seqnum, uint32_t cos, uint32_
 	pkt = &info->seq_pkt[seqnum];
 	pkt->cos      = cos;
 	pkt->tos      = tos;
+	pktgen_packet_ctor(info, seqnum, -1);
+}
+
+void
+pktgen_set_vxlan_seq(port_info_t *info, uint32_t seqnum, uint32_t flag, uint32_t gid, uint32_t vid)
+{
+	pkt_seq_t     *pkt;
+
+	pkt = &info->seq_pkt[seqnum];
+	pkt->vni_flags = flag;
+	pkt->group_id = gid;
+	pkt->vxlan_id = vid;
 	pktgen_packet_ctor(info, seqnum, -1);
 }
 
@@ -3238,7 +3311,7 @@ pktgen_compile_pkt(port_info_t *info, uint32_t seqnum,
 	pkt->ip_dst_addr.addr.ipv4.s_addr    = htonl(ip_daddr->ipv4.s_addr);
 	pkt->dport          = dport;
 	pkt->sport          = sport;
-	pkt->pktSize        = pktsize - FCS_SIZE;
+	pkt->pktSize        = pktsize - ETHER_CRC_LEN;
 	pkt->ipProto        = (proto == 'u') ? PG_IPPROTO_UDP :
 		(proto == 'i') ? PG_IPPROTO_ICMP : PG_IPPROTO_TCP;
 	/* Force the IP protocol to IPv4 if this is a ICMP packet. */

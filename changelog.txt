@@ -6,6 +6,34 @@ Pktgen-DPDK - Traffic Generator powered by DPDK
 ** (Pktgen) Sounds like 'Packet-Gen'**
 
 **=== Modifications ===**
+ - 3.6.3 - Fix race condition in start command
+           Add support of having a different PCAP file per queue of a port
+	   Replace constant with macro for PCAP buffer size
+	   Expose number missed frames to Lua stats.
+	   Fix cleanup of unsent pkts, this fixes duplicate packets being sent.
+ - 3.6.2 - Fix GRE header pointer being NULL and fixed IPPROTO_UDP to use PG_IPPROTO_UDP
+ - 3.6.1 - Fix string truncation warnings for latest GCC
+ - 3.6.0 - Fixed config files.
+         - Fixed tx stopping on some platforms.
+	 - Updated the copyrights to 2019
+	 - Add verbose flag to cleanup startup text.
+	 - Adding support for VxLAN
+ - 3.5.9 - Fixed run.py to find config files better.
+         - Limit the pcap packets to the number of mbufs used.
+         - Added new 'page xstats' screen to view extended stats for ports.
+         - other minor patches
+ - 3.5.8 - Add code to check for using master lcore for ports
+ - 3.5.7 - Fix CentOS building with Lua, fixed cli building as was not linking cli
+ - 3.5.6 - Minor fixes to cleanup builds sync cli,vec,utils and lua code bases.
+ - 3.5.5 - Minor fixes to run pktgen without libs in DPDK.
+ - 3.5.4 - Fix possible mbuf leak and clean up colors for pages.
+ - 3.5.3 - Fix performance problem on FVL NIC with losing mbufs.
+           Number of little cleanups and fixes.
+ - 3.5.2 - Fix 18.08-rc0 fixed some fields that were removed txq_flags and .ignore_offload_fields.
+           Tested backward compat to 18.02 at least. Pktgen should work with at least 18.02 release.
+ - 3.5.1 - Fix 18.05 related problems and minor cleanup in port configuration.
+ - 3.5.0 - fix compiler warning and range size increment command.
+           fixes for working with dpdk 18.04 release.
  - 3.4.9 - fix PRNG random number code to work correctly.
            Add more validation of -m commands
            Fix the rte_pci_bus.h header include problems.
@@ -25,7 +53,7 @@ Pktgen-DPDK - Traffic Generator powered by DPDK
  - 3.3.7 - Fix BLACKLIST and WHITELIST macro change for 17.08 DPDK
  - 3.3.6 - Add flag to enable bonding PMD to do TX calls with zero packets.
            New command 'enable|disable bonding'
-           Cleanup some of the copyright dates to use 2017
+           Cleanup some of the copyright dates to use 2018
  - 3.3.5 - fix sequeuce command be truncated and fix run.py to fix strings in cfg file.
  - 3.3.4 - Minor fixes for help and run.py scipt.
  - 3.3.3 - Make sure the mbuf data size is at least 2K in size

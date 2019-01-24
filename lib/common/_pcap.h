@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -12,6 +12,10 @@
 #include <netinet/in.h>
 
 #include <rte_memory.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define PCAP_MAGIC_NUMBER   0xa1b2c3d4
 #define PCAP_MAJOR_VERSION  2
@@ -82,5 +86,9 @@ size_t _pcap_read(pcap_info_t *pcap,
 			 uint32_t bufLen);
 int _pcap_payloadOffset(const unsigned char *pkt_data, unsigned int *offset,
 			       unsigned int *length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _PCAP_H_ */

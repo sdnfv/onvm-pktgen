@@ -1,9 +1,9 @@
 --
 -- Pktgen - Ver: 3.0.07 (DPDK 16.07.0-rc3)
--- Copyright (c) <2010-2017>, Intel Corporation. All rights reserved., Powered by DPDK
+-- Copyright (c) <2010-2019>, Intel Corporation. All rights reserved., Powered by DPDK
 
 -- Command line arguments: (DPDK args are defaults)
--- ./app/app/x86_64-native-linuxapp-gcc/app/pktgen -c 3fffe -n 3 -m 512 --proc-type primary -- -T -P -m [2-5:6-9].0 -m [10-13:14-17].1 -f themes/black-yellow.theme 
+-- ./app/app/x86_64-native-linuxapp-gcc/app/pktgen -c 3fffe -n 3 -m 512 --proc-type primary -- -T -P -m [2-5:6-9].0 -m [10-13:14-17].1 -f themes/black-yellow.theme
 
 -- #######################################################################
 -- Pktgen Configuration script information:
@@ -14,14 +14,16 @@
 --   Number descriptors: RX 512 TX: 512
 --   Promiscuous mode is Enabled
 
+package.path = package.path ..";?.lua;test/?.lua;app/?.lua;"
 
+require "Pktgen"
 --#######################################################################
 -- Global configuration:
 -- geometry 132x44
 pktgen.mac_from_arp("disable");
 
 -- ######################### Port  0 ##################################
--- 
+--
 -- Port:  0, Burst: 32, Rate:100%, Flags:00020020, TX Count:Forever
 --           SeqCnt:4, Prime:1 VLAN ID:0001, Link: <UP-40000-FD>
 --
@@ -177,7 +179,7 @@ pktgen.seqTable(3, '0', seq_table[3]);
 pktgen.rnd('0', 0, 100, 'XXX...111.000...111.XXX.........');
 pktgen.rnd('0', 1, 100, 'X11...111.000...111.XXX.........');
 -- ######################### Port  1 ##################################
--- 
+--
 -- Port:  1, Burst: 32, Rate:100%, Flags:00020020, TX Count:Forever
 --           SeqCnt:4, Prime:1 VLAN ID:0001, Link: <UP-40000-FD>
 --

@@ -1,10 +1,10 @@
 #   BSD LICENSE
 #
-#   Copyright(c) 2010-2017 Intel Corporation. All rights reserved.
+#   Copyright(c) <2010-2019> Intel Corporation. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# Created 2010-2017 by Keith Wiles @ intel.com
+# Created 2010-2018 by Keith Wiles @ intel.com
 
 ifeq ($(RTE_SDK),)
 $(error "Please define RTE_SDK environment variable")
@@ -30,15 +30,17 @@ export GUI
 
 include $(RTE_SDK)/mk/rte.extsubdir.mk
 
+clean_objs = $(shell find . -name "*.a")
+clean_objs += $(shell find . -name "x86_64*")
+clean_objs += $(shell find . -name "*.d")
+clean_objs += $(shell find . -name "*.o")
+clean_objs += $(shell find . -name "*.cmd")
+
 realclean:
-	@rm -fr app/app
-	@rm -fr lib/common/lib
-	@rm -fr lib/cli/lib
-	@rm -fr lib/lua/src/lib
-	@rm -fr app/$(RTE_TARGET)
-	@rm -fr lib/common/$(RTE_TARGET)
-	@rm -fr lib/cli/$(RTE_TARGET)
-	@rm -fr lib/lua/src/$(RTE_TARGET)
+	@if [ -n "$(clean_objs)" ]; then \
+		rm -fr $(clean_objs); \
+	fi
+	rm -fr app/build
 
 docs:
 	@make -C docs html

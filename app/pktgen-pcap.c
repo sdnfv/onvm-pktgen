@@ -1,9 +1,11 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 /* Created 2010 by Keith Wiles @ intel.com */
+
+#include <rte_lua.h>
 
 #include "pktgen-display.h"
 #include "pktgen-log.h"
@@ -41,8 +43,9 @@ pktgen_print_pcap(uint16_t pid)
 	pcap_info_t *pcap;
 	pcaprec_hdr_t pcap_hdr;
 	char buff[64];
-	char pkt_buff[2048];
+	char pkt_buff[DEFAULT_MBUF_SIZE];
 
+	pktgen_display_set_color("top.page");
 	display_topline("<PCAP Page>");
 	scrn_printf(1, 3, "Port %d of %d", pid, pktgen.nb_ports);
 
@@ -59,6 +62,7 @@ pktgen_print_pcap(uint16_t pid)
 		goto leave;
 	}
 
+	pktgen_display_set_color("stats.stat.label");
 	scrn_eol_pos(row, col);
 	scrn_printf(row++, col, "Port: %d, PCAP Count: %d of %d",
 	               pid, pcap->pkt_idx, pcap->pkt_count);
@@ -78,6 +82,7 @@ pktgen_print_pcap(uint16_t pid)
 
 	_pcap_skip(pcap, pcap->pkt_idx);
 
+	pktgen_display_set_color("stats.stat.values");
 	for (i = pcap->pkt_idx; i < max_pkts; i++) {
 		col = 1;
 		skip = 0;
@@ -166,6 +171,7 @@ pktgen_print_pcap(uint16_t pid)
 	}
 leave:
 	display_dashline(row + 2);
+	pktgen_display_set_color(NULL);
 
 	pktgen.flags &= ~PRINT_LABELS_FLAG;
 }
@@ -207,22 +213,19 @@ pktgen_pcap_mbuf_ctor(struct rte_mempool *mp,
 		      unsigned i)
 {
 	struct rte_mbuf *m = _m;
-
-#if RTE_VERSION >= RTE_VERSION_NUM(16, 7, 0, 0)
-	uint32_t buf_len, mbuf_size, priv_size;
-#else
-	uint32_t buf_len = mp->elt_size - sizeof(struct rte_mbuf);
-#endif
+	uint32_t mbuf_size, buf_len, priv_size = 0;
 	pcaprec_hdr_t hdr;
 	ssize_t len = -1;
-	char buffer[2048];
+	char buffer[DEFAULT_MBUF_SIZE];
 	pcap_info_t *pcap = (pcap_info_t *)opaque_arg;
 
 #if RTE_VERSION >= RTE_VERSION_NUM(16, 7, 0, 0)
 	priv_size = rte_pktmbuf_priv_size(mp);
-	mbuf_size = sizeof(struct rte_mbuf) + priv_size;
 	buf_len = rte_pktmbuf_data_room_size(mp);
+#else
+	buf_len = mp->elt_size - sizeof(struct rte_mbuf);
 #endif
+	mbuf_size = sizeof(struct rte_mbuf) + priv_size;
 	memset(m, 0, mbuf_size);
 
 #if RTE_VERSION >= RTE_VERSION_NUM(17, 11, 0, 0)
@@ -255,6 +258,8 @@ pktgen_pcap_mbuf_ctor(struct rte_mempool *mp,
 	m->next		= NULL;
 
 	for (;; ) {
+		union pktgen_data *d = (union pktgen_data *)&m->udata64;
+
 		if ( (i & 0x3ff) == 0) {
 			scrn_printf(1, 1, "%c\b", "-\\|/"[(i >> 10) & 3]);
 			i++;
@@ -269,13 +274,17 @@ pktgen_pcap_mbuf_ctor(struct rte_mempool *mp,
 		len = hdr.incl_len;
 
 		/* Adjust the packet length if not a valid size. */
-		if (len < (ETHER_MIN_LEN - 4) )
-			len = (ETHER_MIN_LEN - 4);
-		else if (len > (ETHER_MAX_LEN - 4) )
-			len = (ETHER_MAX_LEN - 4);
+		if (len < MIN_PKT_SIZE)
+			len = MIN_PKT_SIZE;
+		else if (len > MAX_PKT_SIZE)
+			len = MAX_PKT_SIZE;
 
 		m->data_len = len;
 		m->pkt_len  = len;
+
+		d->pkt_len = len;
+		d->data_len = len;
+		d->buf_len = m->buf_len;
 
 		rte_memcpy((uint8_t *)m->buf_addr + m->data_off, buffer, len);
 		break;
@@ -300,7 +309,7 @@ pktgen_pcap_parse(pcap_info_t *pcap, port_info_t *info, unsigned qid)
 	pcaprec_hdr_t hdr;
 	uint32_t elt_count, data_size, len, i;
 	uint64_t pkt_sizes = 0;
-	char buffer[2048];
+	char buffer[DEFAULT_MBUF_SIZE];
 	char name[RTE_MEMZONE_NAMESIZE];
 
 	if ( (pcap == NULL) || (info == NULL) )
@@ -318,10 +327,10 @@ pktgen_pcap_parse(pcap_info_t *pcap, port_info_t *info, unsigned qid)
 		/* Skip any jumbo packets or packets that are too small */
 		len = hdr.incl_len;
 
-		if (len < (ETHER_MIN_LEN - 4) )
-			len = (ETHER_MIN_LEN - 4);
-		else if (len > (ETHER_MAX_LEN - 4) )
-			len = (ETHER_MAX_LEN - 4);
+		if (len < MIN_PKT_SIZE)
+			len = MIN_PKT_SIZE;
+		else if (len > MAX_PKT_SIZE)
+			len = MAX_PKT_SIZE;
 
 		elt_count++;
 
@@ -334,22 +343,25 @@ pktgen_pcap_parse(pcap_info_t *pcap, port_info_t *info, unsigned qid)
 	/* If count is greater then zero then we allocate and create the PCAP mbuf pool. */
 	if (elt_count > 0) {
 		/* Create the average size packet */
-		info->pcap->pkt_size    = (pkt_sizes / elt_count);
-		info->pcap->pkt_count   = elt_count;
-		info->pcap->pkt_idx     = 0;
+		pcap->pkt_size    = (pkt_sizes / elt_count);
+		pcap->pkt_count   = elt_count;
+		pcap->pkt_idx     = 0;
 
 		_pcap_rewind(pcap);
 
+		/* Removed to allow for all of the PCAP file to be replayed */
+#if 0
 		/* Round up the count and size to allow for TX ring size. */
 		if (elt_count < MAX_MBUFS_PER_PORT)
 			elt_count = MAX_MBUFS_PER_PORT;
 		elt_count = rte_align32pow2(elt_count);
+#endif
 
 		scrn_printf(0, 0, "\r    Create: %-*s   \b", 16, name);
 		info->q[qid].pcap_mp = rte_mempool_create(
 		                name,
 		                elt_count,
-		                MBUF_SIZE,
+		                DEFAULT_MBUF_SIZE,
 		                0,
 		                sizeof(struct rte_pktmbuf_pool_private),
 		                rte_pktmbuf_pool_init,
@@ -361,16 +373,16 @@ pktgen_pcap_parse(pcap_info_t *pcap, port_info_t *info, unsigned qid)
 		                MEMPOOL_F_DMA);
 		scrn_printf(0, 0, "\r");
 		if (info->q[qid].pcap_mp == NULL)
-			pktgen_log_panic("Cannot init port %d for PCAP packets",
-					 info->pid);
+			pktgen_log_panic("Cannot init port %d for %d PCAP packets",
+					 info->pid, pcap->pkt_count);
 
-		data_size = (info->pcap->pkt_count * MBUF_SIZE);
+		data_size = (pcap->pkt_count * DEFAULT_MBUF_SIZE);
 		scrn_printf(0, 0,
 		        "    Create: %-*s - Number of MBUFs %6u for %5d packets                 = %6u KB\n",
 		        16,
 		        name,
 		        elt_count,
-		        info->pcap->pkt_count,
+		        pcap->pkt_count,
 		        (data_size + 1023) / 1024);
 		pktgen.mem_used         += data_size;
 		pktgen.total_mem_used   += data_size;

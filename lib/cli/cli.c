@@ -1,9 +1,7 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
-/* Created 2016 by Keith Wiles @ intel.com */
+/* Created by Keith Wiles @ intel.com */
 
 #include <stdio.h>
 #include <poll.h>
@@ -13,12 +11,13 @@
 #include <rte_timer.h>
 #include <rte_log.h>
 #include <rte_string_fns.h>
+#include <rte_strings.h>
+#include <rte_pause.h>
 
 #include "cli.h"
 #include "cli_input.h"
-#include "cli_string_fns.h"
 
-int (*lua_dofile)(void *, const char *);
+static int (*__dofile_lua)(void *, const char *);
 
 RTE_DEFINE_PER_LCORE(struct cli *, cli);
 
@@ -26,7 +25,7 @@ int
 cli_use_timers(void)
 {
 	if (!this_cli)
-		return 1;
+		return 0;
 	return this_cli->flags & CLI_USE_TIMERS;
 }
 
@@ -291,7 +290,7 @@ cli_add_dir(const char *name, struct cli_node *dir)
 	p = cli->scratch;
 
 	/* Grab a local copy of the directory path */
-	strncpy(p, name, CLI_MAX_SCRATCH_LENGTH);
+	snprintf(p, CLI_MAX_SCRATCH_LENGTH, "%s", name);
 
 	if (p[0] == '/') {	/* Start from root */
 		dir = cli->root.tqh_first;
@@ -585,9 +584,11 @@ cli_start(const char *msg)
 
 	cli_execute_cmdfiles();
 
-	while(!this_cli->quit_flag)
+	while(!this_cli->quit_flag) {
 		if (cli_poll(&c))
 			cli_input(&c, 1);
+		rte_pause();
+	}
 
 	cli_printf("\n");
 }
@@ -837,7 +838,7 @@ cli_set_prompt(cli_prompt_t prompt)
 void
 cli_set_lua_callback( int(*func)(void *, const char *))
 {
-	lua_dofile = func;
+	__dofile_lua = func;
 }
 
 /**
@@ -857,9 +858,9 @@ cli_execute_cmdfile(const char *filename)
 			cli_printf(">>> User State for CLI not set for Lua\n");
 			return -1;
 		}
-		if (lua_dofile) {
+		if (__dofile_lua) {
 			/* Execute the Lua script file. */
-			if (lua_dofile(this_cli->user_state, filename) != 0)
+			if (__dofile_lua(this_cli->user_state, filename) != 0)
 				return -1;
 		} else
 			cli_printf(">>> Lua is not enabled in configuration!\n");

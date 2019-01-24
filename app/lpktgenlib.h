@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -21,8 +21,6 @@ extern "C" {
 
 LUALIB_API int luaopen_pktgen(lua_State *L);
 void pktgen_lua_openlib(lua_State *L);
-
-void _lua_openlib(lua_State *L);
 
 #ifdef __cplusplus
 }

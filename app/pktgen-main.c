@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -9,12 +9,13 @@
 #include <execinfo.h>
 #include <signal.h>
 
+#include <rte_lua.h>
+#include <rte_lua_socket.h>
+
 #include "pktgen-main.h"
 
 #include "pktgen.h"
 #include "lpktgenlib.h"
-#include "lua_shell.h"
-#include "lua-socket.h"
 #include "lauxlib.h"
 #include "pktgen-cmds.h"
 #include "pktgen-cpu.h"
@@ -22,8 +23,6 @@
 #include "pktgen-log.h"
 #include "cli-functions.h"
 
-/* Defined in examples/pktgen/lib/lua/lua_shell.c */
-void execute_lua_close(lua_State *L);
 #ifdef GUI
 int pktgen_gui_main(int argc, char *argv[]);
 #endif
@@ -61,7 +60,7 @@ pktgen_l2p_dump(void)
 void *
 pktgen_get_lua(void)
 {
-	return pktgen.L;
+	return pktgen.ld->L;
 }
 
 /**************************************************************************//**
@@ -80,17 +79,18 @@ static void
 pktgen_usage(const char *prgname)
 {
 	printf(
-		"Usage: %s [EAL options] -- [-h] [-P] [-G] [-T] [-f cmd_file] [-l log_file] [-s P:PCAP_file] [-m <string>]\n"
+		"Usage: %s [EAL options] -- [-h] [-v] [-P] [-G] [-T] [-f cmd_file] [-l log_file] [-s P:PCAP_file] [-m <string>]\n"
 		"  -s P:file    PCAP packet stream file, 'P' is the port number\n"
+		"  -s P:file0,file1,... list of PCAP packet stream files per queue, 'P' is the port number\n"
 		"  -f filename  Command file (.pkt) to execute or a Lua script (.lua) file\n"
 		"  -l filename  Write log to filename\n"
-		"  -I           use CLI\n"
 		"  -P           Enable PROMISCUOUS mode on all ports\n"
 		"  -g address   Optional IP address and port number default is (localhost:0x5606)\n"
 		"               If -g is used that enable socket support as a server application\n"
 		"  -G           Enable socket support using default server values localhost:0x5606 \n"
 		"  -N           Enable NUMA support\n"
 		"  -T           Enable the color output\n"
+		"  -v           Verbose output\n"
 		"  --crc-strip  Strip CRC on all ports\n"
 		"  -m <string>  matrix for mapping ports to logical cores\n"
 		"      BNF: (or kind of BNF)\n"
@@ -143,10 +143,10 @@ pktgen_usage(const char *prgname)
 static int
 pktgen_parse_args(int argc, char **argv)
 {
-	int opt, ret, port;
+	int opt, ret, port, q;
 	char **argvopt;
 	int option_index;
-	char *prgname = argv[0], *p;
+	char *prgname = argv[0], *p, *pc;
 	static struct option lgopts[] = {
 		{"crc-strip", 0, 0, 0},
 		{NULL, 0, 0, 0}
@@ -161,7 +161,8 @@ pktgen_parse_args(int argc, char **argv)
 	for (opt = 0; opt < argc; opt++)
 		pktgen.argv[opt] = strdup(argv[opt]);
 
-	while ((opt = getopt_long(argc, argvopt, "p:m:f:l:s:g:hPNGT",
+	pktgen.verbose = 0;
+	while ((opt = getopt_long(argc, argvopt, "p:m:f:l:s:g:hPNGTv",
 				  lgopts, &option_index)) != EOF)
 		switch (opt) {
 		case 'p':
@@ -187,14 +188,27 @@ pktgen_parse_args(int argc, char **argv)
 		case 's':	/* Read a PCAP packet capture file (stream) */
 			port = strtol(optarg, NULL, 10);
 			p = strchr(optarg, ':');
-			if ( (p == NULL) ||
-			     (pktgen.info[port].pcap =
-				      _pcap_open(++p, port)) == NULL) {
-				pktgen_log_error(
-					"Invalid PCAP filename (%s) must include port number as P:filename",
-					optarg);
-				pktgen_usage(prgname);
-				return -1;
+			pc = strchr(optarg, ',');
+			if (p == NULL)
+				goto pcap_err;
+			if (pc == NULL) {
+				pktgen.info[port].pcap = _pcap_open(++p, port);
+				if (pktgen.info[port].pcap == NULL)
+					goto pcap_err;
+			} else {
+				q = 0;
+				while (p != NULL && q < NUM_Q) {
+					p++;
+					pc = strchr(p, ',');
+					if (pc != NULL)
+						*pc = '\0';
+					pktgen.info[port].pcaps[q] = _pcap_open(p, port);
+					if (pktgen.info[port].pcaps[q] == NULL)
+						goto pcap_err;
+					p = pc;
+					q++;
+				}
+				pktgen.info[port].pcap = pktgen.info[port].pcaps[0];
 			}
 			break;
 		case 'P':	/* Enable promiscuous mode on the ports */
@@ -234,6 +248,9 @@ pktgen_parse_args(int argc, char **argv)
 		case 'T':
 			pktgen.flags    |= ENABLE_THEME_FLAG;
 			break;
+		case 'v':
+			pktgen.verbose =- 1;
+			break;
 
 		case 'h':	/* print out the help message */
 			pktgen_usage(prgname);
@@ -254,6 +271,12 @@ pktgen_parse_args(int argc, char **argv)
 	ret = optind - 1;
 	optind = 1;	/* reset getopt lib */
 	return ret;
+
+pcap_err:
+	pktgen_log_error("Invalid PCAP filename (%s) must include port number as P:filename",
+			 optarg);
+	pktgen_usage(prgname);
+	return -1;
 }
 
 #define MAX_BACKTRACE	32
@@ -300,9 +323,13 @@ sig_handler(int v __rte_unused)
 }
 
 static int
-pktgen_lua_dofile(void * L, const char * filename)
+pktgen_lua_dofile(void *ld, const char * filename)
 {
-	return luaL_dofile(L, filename);
+	int ret;
+
+	ret = lua_dofile((luaData_t *)ld, filename);
+
+	return ret;
 }
 
 /**************************************************************************//**
@@ -368,15 +395,15 @@ main(int argc, char **argv)
 	if (pktgen_cli_create())
 		return -1;
 
-	lua_newlib_add(_lua_openlib);
-	cli_set_lua_callback(pktgen_lua_dofile);
+	lua_newlib_add(pktgen_lua_openlib, 0);
 
 	/* Open the Lua script handler. */
-	if ( (pktgen.L = lua_create_instance()) == NULL) {
+	if ( (pktgen.ld = lua_create_instance()) == NULL) {
 		pktgen_log_error("Failed to open Lua pktgen support library");
 		return -1;
 	}
-	cli_set_user_state(pktgen.L);
+	cli_set_lua_callback(pktgen_lua_dofile);
+	cli_set_user_state(pktgen.ld);
 
 	/* parse application arguments (after the EAL ones) */
 	ret = pktgen_parse_args(argc, argv);
@@ -398,42 +425,43 @@ main(int argc, char **argv)
 
 	print_copyright(PKTGEN_APP_NAME, PKTGEN_CREATED_BY);
 
-	pktgen_log_info(
-		">>> Packet Burst %d, RX Desc %d, TX Desc %d, mbufs/port %d, mbuf cache %d",
-		DEFAULT_PKT_BURST,
-		DEFAULT_RX_DESC,
-		DEFAULT_TX_DESC,
-		MAX_MBUFS_PER_PORT,
-		MBUF_CACHE_SIZE);
+	if (pktgen.verbose)
+		pktgen_log_info(
+			">>> Packet Burst %d, RX Desc %d, TX Desc %d, mbufs/port %d, mbuf cache %d",
+			DEFAULT_PKT_BURST,
+			DEFAULT_RX_DESC,
+			DEFAULT_TX_DESC,
+			MAX_MBUFS_PER_PORT,
+			MBUF_CACHE_SIZE);
 
 	/* Configure and initialize the ports */
 	pktgen_config_ports();
 
-	pktgen_log_info("");
-	pktgen_log_info("=== Display processing on lcore %d", rte_lcore_id());
+	if (pktgen.verbose) {
+		pktgen_log_info("");
+		pktgen_log_info("=== Display processing on lcore %d", rte_lcore_id());
+	}
 
 	/* launch per-lcore init on every lcore except master and master + 1 lcores */
-	for (i = 0; i < RTE_MAX_LCORE; i++) {
-		if ( (i == rte_get_master_lcore()) || !rte_lcore_is_enabled(i) )
-			continue;
-		ret = rte_eal_remote_launch(pktgen_launch_one_lcore, NULL, i);
-		if (ret != 0)
-			pktgen_log_error("Failed to start lcore %d, return %d", i, ret);
-	}
-	rte_delay_ms(1000);	/* Wait for the lcores to start up. */
+	ret = rte_eal_mp_remote_launch(pktgen_launch_one_lcore, NULL, SKIP_MASTER);
+	if (ret != 0)
+		pktgen_log_error("Failed to start lcore %d, return %d", i, ret);
+
+	rte_delay_us_sleep(50000);	/* Wait for the lcores to start up. */
 
 	/* Disable printing log messages of level info and below to screen, */
 	/* erase the screen and start updating the screen again. */
 	pktgen_log_set_screen_level(LOG_LEVEL_WARNING);
 	scrn_erase(this_scrn->nrows);
 
-	splash_screen(3, 16, PKTGEN_APP_NAME, PKTGEN_CREATED_BY);
-
 	scrn_resume();
 
 	pktgen_clear_display();
 
+	pktgen_log_info("=== Timer Setup\n");
 	rte_timer_setup();
+
+	pktgen_log_info("=== After Timer Setup\n");
 
 	if (pktgen.flags & ENABLE_GUI_FLAG) {
 		if (!scrn_is_paused() ) {
@@ -443,7 +471,9 @@ main(int argc, char **argv)
 			scrn_pos(this_scrn->nrows, 1);
 		}
 
-		lua_init_socket(pktgen.L,
+		pktgen.ld_sock = lua_create_instance();
+
+		lua_start_socket(pktgen.ld_sock,
 				&pktgen.thread,
 				pktgen.hostname,
 				pktgen.socket_port);
@@ -452,9 +482,10 @@ main(int argc, char **argv)
 #endif
 	}
 
+	pktgen_log_info("=== Run CLI\n");
 	pktgen_cli_start();
 
-	execute_lua_close(pktgen.L);
+	lua_execute_close(pktgen.ld);
 
 	pktgen_stop_running();
 
@@ -467,7 +498,7 @@ main(int argc, char **argv)
 	/* Wait for all of the cores to stop running and exit. */
 	rte_eal_mp_wait_lcore();
 
-	for (i = 0; i < pktgen.nb_ports; i++) {
+	RTE_ETH_FOREACH_DEV(i) {
 		rte_eth_dev_stop(i);
 		rte_delay_ms(100);
 		rte_eth_dev_close(i);

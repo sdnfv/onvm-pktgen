@@ -1,7 +1,5 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
 #include <stdio.h>
@@ -14,6 +12,7 @@
 #include <rte_debug.h>
 #include <rte_log.h>
 #include <rte_string_fns.h>
+#include <rte_strings.h>
 
 #include "cli.h"
 #include "cli_input.h"
@@ -22,7 +21,6 @@
 #include "cli_map.h"
 #include "cli_file.h"
 #include "cli_help.h"
-#include "cli_string_fns.h"
 
 static int
 __print_help(struct cli_node *node, char *search)
@@ -240,7 +238,7 @@ ls_cmd(int argc, char **argv)
 	else
 		cli_scan_directory(node, __list_dir, CLI_ALL_TYPE, &args);
 
-	printf("\n");
+	cli_printf("\n");
 	return 0;
 }
 
@@ -516,14 +514,10 @@ sleep_cmd(int argc __rte_unused, char **argv)
 		return 0;
 	}
 
-	if (cli_use_timers()) {
-		while (cnt--) {
+	while (cnt--) {
+		if (cli_use_timers())
 			rte_timer_manage();
-			rte_delay_ms(250);
-		}
-	} else {
-		while (cnt--)
-			rte_delay_ms(250);
+		rte_delay_ms(250);
 	}
 	return 0;
 }

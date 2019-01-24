@@ -1,12 +1,11 @@
 /*-
- * Copyright (c) <2014-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2014-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 /* Created 2014 by Keith Wiles @ intel.com */
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -30,6 +29,10 @@
 #include "core_info.h"
 
 #define PORT_STRING_SIZE    256
+
+#if RTE_VERSION >= RTE_VERSION_NUM(18, 5, 0, 0)
+#define rte_eal_devargs_add	rte_devargs_add
+#endif
 
 /**************************************************************************//**
  *
@@ -165,14 +168,12 @@ create_blacklist(uint64_t portmask,
 		memset(pci_addr_str, 0, sizeof(pci_addr_str));
 		if ( (portmask & (1ULL << i)) == 0) {
 			fprintf(stdout, "-- %s\n", desc[i]);
-			strncpy(pci_addr_str, (void *)desc[i], 12);
-			rte_eal_devargs_add(RTE_DEVTYPE_BLACKLISTED_PCI,
-					    pci_addr_str);
+			snprintf(pci_addr_str, sizeof(pci_addr_str), "%s", desc[i]);
+			rte_eal_devargs_add(RTE_DEVTYPE_BLACKLISTED_PCI, pci_addr_str);
 			idx++;
 		} else {
-			strncpy(pci_addr_str, (void *)desc[i], 12);
-			rte_eal_devargs_add(RTE_DEVTYPE_WHITELISTED_PCI,
-					    pci_addr_str);
+			snprintf(pci_addr_str, sizeof(pci_addr_str), "%s", desc[i]);
+			rte_eal_devargs_add(RTE_DEVTYPE_WHITELISTED_PCI, pci_addr_str);
 			fprintf(stdout, "++ %s\n", desc[i]);
 		}
 	}

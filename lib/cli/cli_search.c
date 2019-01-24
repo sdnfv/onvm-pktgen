@@ -1,13 +1,11 @@
-/*-
- * Copyright(c) 2016-2017 Intel Corporation. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) <2016-2019> Intel Corporation.
  */
 
 #include <rte_string_fns.h>
+#include <rte_strings.h>
 
 #include "cli.h"
-#include "cli_string_fns.h"
 
 static int
 __count_nodes(struct cli_node *node,
@@ -175,7 +173,7 @@ cli_search_dir(struct cli_node *dir, const char *name, uint32_t type)
 
 	/* Process the .. and . directories */
 	if (!strcmp(name, ".."))
-		return (dir->parent) ? dir->parent : NULL;
+		return dir->parent;
 	else if (!strcmp(name, "."))
 		return dir;
 
@@ -211,10 +209,7 @@ cli_find_node(const char *path, struct cli_node **ret)
 	n = rte_strtok(my_path, "/", argv, CLI_MAX_ARGVS);
 
 	/* handle the special case of leading '/' */
-	if (path[0] == '/')
-		dir = this_cli->root.tqh_first;
-	else
-		dir = get_cwd();
+	dir = (path[0] == '/')? get_root() : get_cwd();
 
 	/* Follow the directory path if present */
 	for (i = 0, node = NULL; i < n; i++) {
@@ -240,7 +235,7 @@ _leave:
 }
 
 struct cli_node *
-cli_last_node_in_path(const char *path)
+cli_last_dir_in_path(const char *path)
 {
 	struct cli_node *node, *dir;
 	char *my_path = NULL;

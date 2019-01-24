@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2010-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2010-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -39,6 +39,7 @@ void pktgen_process_stats(struct rte_timer *tim, void *arg);
 
 void pktgen_page_stats(void);
 void pktgen_page_phys_stats(void);
+void pktgen_page_xstats(uint16_t pid);
 
 #ifdef __cplusplus
 }

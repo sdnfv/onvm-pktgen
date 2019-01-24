@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) <2016-2017>, Intel Corporation. All rights reserved.
+ * Copyright (c) <2016-2019>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -7,6 +7,8 @@
 /* Created 2016 by Keith Wiles @ intel.com */
 
 #include <stdio.h>
+
+#include "rte_lua.h"
 
 #include "pktgen-cmds.h"
 #include "pktgen-display.h"
@@ -33,7 +35,7 @@ static void
 pktgen_print_static_data(void)
 {
 	port_info_t *info;
-	struct rte_eth_dev_info dev;
+	struct rte_eth_dev_info dev = { 0 };
 	uint32_t pid, col, row, sp, ip_row;
 	pkt_seq_t *pkt;
 	char buff[32];
@@ -99,6 +101,7 @@ pktgen_print_static_data(void)
 
 		pkt     = &info->seq_pkt[SINGLE_PKT];
 
+		pktgen_display_set_color("stats.stat.values");
 		/* Display Port information Src/Dest IP addr, Netmask, Src/Dst MAC addr */
 		col = (COLUMN_WIDTH_1 * pid) + COLUMN_WIDTH_0;
 		row = ip_row;
@@ -111,7 +114,7 @@ pktgen_print_static_data(void)
 		pktgen_transmit_count_rate(pid, buff, sizeof(buff));
 		scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-		snprintf(buff, sizeof(buff), "%d /%5d", pkt->pktSize + FCS_SIZE, info->tx_burst);
+		snprintf(buff, sizeof(buff), "%d /%5d", pkt->pktSize + ETHER_CRC_LEN, info->tx_burst);
 		scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 		snprintf(buff, sizeof(buff), "%d /%5d", pkt->sport, pkt->dport);
 		scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
@@ -135,12 +138,31 @@ pktgen_print_static_data(void)
 		scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1,
 		               inet_mtoa(buff, sizeof(buff), &pkt->eth_src_addr));
 		rte_eth_dev_info_get(pid, &dev);
+#if RTE_VERSION < RTE_VERSION_NUM(18, 4, 0, 0)
 		snprintf(buff, sizeof(buff), "%04x:%04x/%02x:%02d.%d",
 			dev.pci_dev->id.vendor_id,
 			dev.pci_dev->id.device_id,
 			dev.pci_dev->addr.bus,
 			dev.pci_dev->addr.devid,
 			dev.pci_dev->addr.function);
+#else
+		struct rte_bus *bus;
+		if (dev.device)
+			bus = rte_bus_find_by_device(dev.device);
+		else
+			bus = NULL;
+		if (bus && !strcmp(bus->name, "pci")) {
+			struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(dev.device);
+			snprintf(buff, sizeof(buff), "%04x:%04x/%02x:%02d.%d",
+				pci_dev->id.vendor_id,
+				pci_dev->id.device_id,
+				pci_dev->addr.bus,
+				pci_dev->addr.devid,
+				pci_dev->addr.function);
+		} else
+			snprintf(buff, sizeof(buff), "%04x:%04x/%02x:%02d.%d",
+				0, 0, 0, 0, 0);
+#endif
 		scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
 		display_cnt++;
@@ -212,6 +234,7 @@ pktgen_page_latency(void)
 		scrn_printf(row, col, "%*s", COLUMN_WIDTH_1, buff);
 		pktgen_display_set_color(NULL);
 
+		pktgen_display_set_color("stats.stat.values");
 		/* Rx/Tx pkts/s rate */
 		row = LINK_STATE_ROW + 1;
 		snprintf(buff, sizeof(buff), "%" PRIu64 "/%" PRIu64,
