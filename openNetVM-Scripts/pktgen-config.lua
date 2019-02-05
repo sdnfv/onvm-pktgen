@@ -36,12 +36,13 @@
 
 -- Change any of the settings below to configure Pktgen-DPDK
 
-
---package.path = package.path ..";?.lua;test/?.lua;app/?.lua;"
-
 -- A list of the test script for Pktgen and Lua.
 -- Each command somewhat mirrors the pktgen command line versions.
 -- A couple of the arguments have be changed to be more like the others.
+
+package.path = package.path ..";?.lua;test/?.lua;app/?.lua;"
+
+require "Pktgen"
 
 printf("Lua Version      : %s\n", pktgen.info.Lua_Version);
 printf("Pktgen Version   : %s\n", pktgen.info.Pktgen_Version);
@@ -62,8 +63,6 @@ printf("Total port Count %d\n", pktgen.totalPorts());
 pktgen.set_mac("0", "90:e2:ba:5e:73:6c"); 
 pktgen.set_ipaddr("0", "dst", "10.11.1.17");
 pktgen.set_ipaddr("0", "src", "10.11.1.16");
-
-
 
 pktgen.set_proto("all", "udp");
 pktgen.set_type("all", "ipv4");
