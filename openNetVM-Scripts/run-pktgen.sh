@@ -56,11 +56,11 @@ echo "Start pktgen"
 
 if [ $1 = 2 ]; then
 
-(cd ../ && sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x1 -P -m "[1:2].0, [3:4].1" -f $PKTGENCONFIG)
+(cd ../ && sudo $PKTGENBUILD -c 0xff -n 3 $BLACK_LIST -- -p 0x1 -P -m "[1:2].0, [3:4].1" -f $PKTGENCONFIG)
 
 else
 
-(cd ../ && sudo $PKTGENBUILD -c ffff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f $PKTGENCONFIG)
+(cd ../ && sudo $PKTGENBUILD -c 0xff -n 3 $BLACK_LIST -- -p 0x3 -P -m "[4:8].0" -f $PKTGENCONFIG)
 
 fi
 
